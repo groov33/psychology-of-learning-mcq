@@ -14,6 +14,7 @@ def parse_nptel_folder():
         for page in doc:
             full_text += page.get_text() + "\n"
         doc.close()
+        full_text = full_text.replace('\xa0', ' ')
         
         # Determine week number from filename e.g. 01.Assignement_Psy.pdf -> 1
         bname = os.path.basename(f)
@@ -59,7 +60,9 @@ def parse_nptel_folder():
                 block_text = block_text[:sol_m.start()].strip()
                 
             # Extract Answer
-            ans_m = re.search(r'(?:Ans[\.\s:=]+|Answer[\.\s:=]+)\s*([A-Za-z0-9,\s=]+)', block_text, re.I)
+            ans_m = re.search(r'(?:^|\n)\s*(?:Ans[\.\s:=]+|Answer[\.\s:=]+)\s*([^\n\r]+)', block_text, re.I)
+            if not ans_m:
+                ans_m = re.search(r'\b(?:Ans[\.\s:=]+|Answer[\.\s:=]+)\s*([^\n\r]+)', block_text, re.I)
             raw_ans = ""
             if ans_m:
                 raw_ans = ans_m.group(1).strip()
@@ -117,6 +120,7 @@ def parse_nptel_folder():
                 'question': question_text,
                 'options': options,
                 'answer': ans_keys,
+                'raw_ans': raw_ans,
                 'explanation': solution,
                 'source': f'Psychology of learning NPTEL/{bname}'
             })
