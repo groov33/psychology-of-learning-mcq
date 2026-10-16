@@ -508,15 +508,19 @@ class QuizApp {
       card.className = cardClass;
       card.onclick = () => this.selectOption(opt.key);
 
+      const statusIcon = isPracticeRevealed ? (
+        isCorrect ? '<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' :
+        (isSelected ? '<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>' : '')
+      ) : '';
+
       card.innerHTML = `
         <div class="${pillClass}">${opt.key}</div>
-        <div class="flex-1 text-sm sm:text-base font-medium leading-relaxed pt-0.5">
+        <div class="flex-1 text-sm sm:text-base font-medium leading-relaxed pt-0.5 pr-2">
           ${opt.text}
         </div>
-        ${isPracticeRevealed ? (
-          isCorrect ? '<i data-lucide="check" class="w-5 h-5 text-emerald-600 flex-shrink-0"></i>' :
-          (isSelected ? '<i data-lucide="x" class="w-5 h-5 text-rose-600 flex-shrink-0"></i>' : '')
-        ) : ''}
+        <div class="w-6 h-6 flex items-center justify-center flex-shrink-0 pt-0.5">
+          ${statusIcon}
+        </div>
       `;
       container.appendChild(card);
     });
@@ -554,9 +558,9 @@ class QuizApp {
 
     const nextBtn = document.getElementById('btn-next-q');
     if (index === total - 1) {
-      nextBtn.innerHTML = `<span>Submit</span> <i data-lucide="check-circle" class="w-4 h-4"></i>`;
+      nextBtn.innerHTML = `<span>Submit</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
     } else {
-      nextBtn.innerHTML = `<span>Next</span> <i data-lucide="chevron-right" class="w-4 h-4"></i>`;
+      nextBtn.innerHTML = `<span>Next</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>`;
     }
 
     this.renderPalette();

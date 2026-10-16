@@ -75,7 +75,8 @@ body {
 }
 
 .option-card:hover:not(.locked) {
-  transform: translateY(-2px);
+  border-color: #6366f1;
+  box-shadow: 0 4px 14px -2px rgba(99, 102, 241, 0.12);
 }
 
 /* Correct / Wrong highlight states */
