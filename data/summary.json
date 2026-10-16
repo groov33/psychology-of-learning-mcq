@@ -1,0 +1,61 @@
+{
+  "totalQuestions": 478,
+  "byYear": {
+    "2026": 120,
+    "2025": 110,
+    "2024": 119,
+    "2023": 129
+  },
+  "byWeek": {
+    "Week 0": 18,
+    "Week 1": 40,
+    "Week 2": 40,
+    "Week 3": 40,
+    "Week 4": 40,
+    "Week 5": 40,
+    "Week 6": 40,
+    "Week 7": 40,
+    "Week 8": 40,
+    "Week 9": 40,
+    "Week 10": 40,
+    "Week 11": 40,
+    "Week 12": 20
+  },
+  "years": [
+    {
+      "id": "2026",
+      "label": "2026 (Current Course Assignment)",
+      "count": 120
+    },
+    {
+      "id": "2025",
+      "label": "2025 Assignment PYQs",
+      "count": 110
+    },
+    {
+      "id": "2024",
+      "label": "2024 Assignment PYQs",
+      "count": 119
+    },
+    {
+      "id": "2023",
+      "label": "2023 Assignment PYQs",
+      "count": 129
+    }
+  ],
+  "weeks": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ]
+}

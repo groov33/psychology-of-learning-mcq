@@ -1,0 +1,8 @@
+Extras/
+__pycache__/
+scripts/
+*.py
+*.bat
+.git/
+verify_dataset.py
+build_dataset.py

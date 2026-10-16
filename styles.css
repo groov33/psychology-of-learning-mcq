@@ -1,0 +1,197 @@
+/* Custom CSS styles for NPTEL Psychology of Learning MCQ Practice App */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Smooth Transitions */
+.transition-all-fast {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card Glow Effects */
+.glow-primary {
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.2), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+}
+
+.glow-success {
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.25);
+}
+
+.glow-error {
+  box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.25);
+}
+
+/* Flashcard 3D flip */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Custom Option Radio / Checkbox styling */
+.option-card {
+  position: relative;
+  cursor: pointer;
+  border-width: 2px;
+  transition: all 0.2s ease;
+}
+
+.option-card:hover:not(.locked) {
+  transform: translateY(-2px);
+}
+
+/* Correct / Wrong highlight states */
+.option-card.correct-revealed {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  color: #065f46 !important;
+}
+
+.dark .option-card.correct-revealed {
+  border-color: #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  color: #6ee7b7 !important;
+}
+
+.option-card.wrong-revealed {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  color: #991b1b !important;
+}
+
+.dark .option-card.wrong-revealed {
+  border-color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  color: #fca5a5 !important;
+}
+
+/* Option letter pill */
+.option-pill {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Question Palette item */
+.palette-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.palette-btn:hover {
+  transform: scale(1.08);
+}
+
+.palette-btn.current {
+  outline: 2.5px solid #6366f1;
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+
+/* Circular Score Gauge */
+.circular-chart {
+  display: block;
+  margin: 0 auto;
+  max-width: 160px;
+  max-height: 160px;
+}
+
+.circle-bg {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 3.8;
+}
+
+.dark .circle-bg {
+  stroke: #334155;
+}
+
+.circle {
+  fill: none;
+  stroke-width: 3.8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 1s ease-in-out;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+/* Printable test result */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}

@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NPTEL Psychology of Learning - MCQ Mastery Platform</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#1e1b4b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti for Scorecard celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Logo & Branding -->
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="app.showView('builder')">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+            <i data-lucide="brain" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-brand-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">PsychLearn</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-300">NPTEL PYQ</span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Psychology of Learning • 478 Questions</p>
+          </div>
+        </div>
+
+        <!-- Desktop Navigation Tabs -->
+        <nav class="hidden md:flex items-center space-x-1 lg:space-x-2">
+          <button onclick="app.showView('builder')" id="nav-btn-builder" class="nav-tab px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/60 transition-all">
+            <i data-lucide="sliders" class="w-4 h-4"></i>
+            <span>Test Builder</span>
+          </button>
+          <button onclick="app.showView('explorer')" id="nav-btn-explorer" class="nav-tab px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>Question Bank</span>
+          </button>
+          <button onclick="app.showView('flashcards')" id="nav-btn-flashcards" class="nav-tab px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+            <span>Flashcards</span>
+          </button>
+          <button onclick="app.showView('mistakes')" id="nav-btn-mistakes" class="nav-tab px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            <span>Mistakes Vault</span>
+            <span id="nav-mistakes-badge" class="hidden text-xs bg-rose-500 text-white font-bold px-1.5 py-0.2 rounded-full">0</span>
+          </button>
+          <button onclick="app.showView('bookmarks')" id="nav-btn-bookmarks" class="nav-tab px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 text-slate-600 dark:text-slate-400 hover:text-brand-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+            <i data-lucide="bookmark" class="w-4 h-4"></i>
+            <span>Bookmarks</span>
+            <span id="nav-bookmarks-badge" class="hidden text-xs bg-amber-500 text-white font-bold px-1.5 py-0.2 rounded-full">0</span>
+          </button>
+        </nav>
+
+        <!-- Right Side Controls (Theme Toggle & Mobile Menu) -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+          <!-- Dark Mode Toggle -->
+          <button onclick="app.toggleTheme()" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition shadow-sm" title="Toggle Dark/Light Mode">
+            <i data-lucide="moon" id="theme-icon-moon" class="w-4 h-4 hidden dark:block"></i>
+            <i data-lucide="sun" id="theme-icon-sun" class="w-4 h-4 block dark:hidden text-amber-500"></i>
+          </button>
+
+          <!-- Mobile Menu Button -->
+          <button onclick="app.toggleMobileMenu()" class="md:hidden p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            <i data-lucide="menu" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Navigation Dropdown -->
+      <div id="mobile-menu" class="hidden md:hidden pb-4 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
+        <button onclick="app.showView('builder'); app.toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2">
+          <i data-lucide="sliders" class="w-4 h-4"></i><span>Test Builder</span>
+        </button>
+        <button onclick="app.showView('explorer'); app.toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2">
+          <i data-lucide="search" class="w-4 h-4"></i><span>Question Bank</span>
+        </button>
+        <button onclick="app.showView('flashcards'); app.toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2">
+          <i data-lucide="layers" class="w-4 h-4"></i><span>Flashcards</span>
+        </button>
+        <button onclick="app.showView('mistakes'); app.toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-500"></i><span>Mistakes Vault</span>
+        </button>
+        <button onclick="app.showView('bookmarks'); app.toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-2">
+          <i data-lucide="bookmark" class="w-4 h-4 text-amber-500"></i><span>Bookmarks</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main App Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: COMBINATION & TEST BUILDER DASHBOARD -->
+    <!-- ========================================== -->
+    <div id="view-builder" class="view-panel space-y-8 animate-fade-in">
+      
+      <!-- Hero Welcome Banner -->
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-brand-700 via-indigo-700 to-purple-800 text-white p-6 sm:p-8 shadow-xl">
+        <div class="relative z-10 max-w-3xl">
+          <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-3">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
+            <span>NPTEL IIT Kharagpur Course Exam Prep</span>
+          </div>
+          <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight">Psychology of Learning MCQ Practice</h1>
+          <p class="mt-2 text-brand-100 text-sm sm:text-base leading-relaxed">
+            Test any custom combination of topics and years. Covers the current <span class="font-bold text-white">2026 course assignments</span> plus <span class="font-bold text-white">2025, 2024, and 2023 PYQs</span> across all 13 weekly units!
+          </p>
+          
+          <!-- Quick Stat Counters -->
+          <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 pt-4 border-t border-white/20">
+            <div class="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <div class="text-2xl sm:text-3xl font-extrabold" id="hero-total-q">478</div>
+              <div class="text-xs text-brand-200">Total Questions</div>
+            </div>
+            <div class="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <div class="text-2xl sm:text-3xl font-extrabold">4</div>
+              <div class="text-xs text-brand-200">Years (2023-2026)</div>
+            </div>
+            <div class="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <div class="text-2xl sm:text-3xl font-extrabold">13</div>
+              <div class="text-xs text-brand-200">Weekly Units (0-12)</div>
+            </div>
+            <div class="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
+              <div class="text-2xl sm:text-3xl font-extrabold">100%</div>
+              <div class="text-xs text-brand-200">Verified Answers</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Background decorative pattern -->
+        <div class="absolute -right-12 -bottom-12 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
+      </div>
+
+      <!-- Test Configuration Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left 2 Cols: Combinations (Mode, Years, Weeks) -->
+        <div class="lg:col-span-2 space-y-8">
+          
+          <!-- Mode Selection -->
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center space-x-3 mb-4">
+              <div class="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">1</div>
+              <h2 class="text-lg font-bold">Select Testing Mode</h2>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Practice Mode Card -->
+              <label class="cursor-pointer relative flex flex-col p-4 rounded-xl border-2 transition-all" id="mode-card-practice">
+                <input type="radio" name="quizMode" value="practice" checked onchange="app.onModeChange('practice')" class="sr-only">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                      <i data-lucide="zap" class="w-4 h-4"></i>
+                    </div>
+                    <span class="font-bold text-base">Practice Mode</span>
+                  </div>
+                  <span class="mode-check-badge w-5 h-5 rounded-full border-2 border-brand-500 bg-brand-500 text-white flex items-center justify-center text-xs">✓</span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Instant answer reveal & explanation on click. Great for topic-by-topic learning and active study.
+                </p>
+              </label>
+
+              <!-- Exam Mode Card -->
+              <label class="cursor-pointer relative flex flex-col p-4 rounded-xl border-2 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all" id="mode-card-exam">
+                <input type="radio" name="quizMode" value="exam" onchange="app.onModeChange('exam')" class="sr-only">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                      <i data-lucide="award" class="w-4 h-4"></i>
+                    </div>
+                    <span class="font-bold text-base">Exam Simulation</span>
+                  </div>
+                  <span class="mode-check-badge w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-700 flex items-center justify-center text-xs"></span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Timed test with question palette. Answers and detailed analytics scorecard shown only upon final submit.
+                </p>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 2: Year Combinations -->
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">2</div>
+                <div>
+                  <h2 class="text-lg font-bold">Choose Assignment Sources / Years</h2>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">Select one, multiple, or all years to test</p>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2 text-xs">
+                <button type="button" onclick="app.setYearFilter('all')" class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold transition">All Years</button>
+                <button type="button" onclick="app.setYearFilter('current')" class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold transition">Only 2026</button>
+                <button type="button" onclick="app.setYearFilter('pyqs')" class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold transition">Only PYQs</button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              <!-- 2026 Card -->
+              <label class="year-checkbox-card cursor-pointer p-3.5 rounded-xl border-2 border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 flex flex-col justify-between transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-brand-700 dark:text-brand-300">2026</span>
+                  <input type="checkbox" value="2026" checked onchange="app.updateMatchCount()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-semibold text-slate-700 dark:text-slate-300">Current Course</div>
+                  <div class="text-[11px] text-slate-500">120 Questions (W1-12)</div>
+                </div>
+              </label>
+
+              <!-- 2025 Card -->
+              <label class="year-checkbox-card cursor-pointer p-3.5 rounded-xl border-2 border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 flex flex-col justify-between transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-brand-700 dark:text-brand-300">2025</span>
+                  <input type="checkbox" value="2025" checked onchange="app.updateMatchCount()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-semibold text-slate-700 dark:text-slate-300">Previous Year</div>
+                  <div class="text-[11px] text-slate-500">110 Questions (W1-11)</div>
+                </div>
+              </label>
+
+              <!-- 2024 Card -->
+              <label class="year-checkbox-card cursor-pointer p-3.5 rounded-xl border-2 border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 flex flex-col justify-between transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-brand-700 dark:text-brand-300">2024</span>
+                  <input type="checkbox" value="2024" checked onchange="app.updateMatchCount()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-semibold text-slate-700 dark:text-slate-300">Previous Year</div>
+                  <div class="text-[11px] text-slate-500">119 Questions (W0-11)</div>
+                </div>
+              </label>
+
+              <!-- 2023 Card -->
+              <label class="year-checkbox-card cursor-pointer p-3.5 rounded-xl border-2 border-brand-500 bg-brand-50/50 dark:bg-brand-950/30 flex flex-col justify-between transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="font-extrabold text-brand-700 dark:text-brand-300">2023</span>
+                  <input type="checkbox" value="2023" checked onchange="app.updateMatchCount()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-semibold text-slate-700 dark:text-slate-300">Previous Year</div>
+                  <div class="text-[11px] text-slate-500">129 Questions (W0-12)</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 3: Week & Concept Combinations -->
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 flex items-center justify-center font-bold">3</div>
+                <div>
+                  <h2 class="text-lg font-bold">Select Weeks & Course Concepts</h2>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">Target specific units or mix any combination</p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                <button type="button" onclick="app.setWeekFilter('all')" class="px-2.5 py-1 rounded-md bg-brand-50 dark:bg-brand-950/80 text-brand-700 dark:text-brand-300 font-semibold border border-brand-200 dark:border-brand-800">All (0-12)</button>
+                <button type="button" onclick="app.setWeekFilter('foundations')" class="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium">Weeks 0-4</button>
+                <button type="button" onclick="app.setWeekFilter('cognition')" class="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium">Weeks 5-8</button>
+                <button type="button" onclick="app.setWeekFilter('applied')" class="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium">Weeks 9-12</button>
+                <button type="button" onclick="app.setWeekFilter('clear')" class="px-2 py-1 rounded-md bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 font-medium">Clear</button>
+              </div>
+            </div>
+
+            <!-- Weeks Grid Container -->
+            <div id="weeks-selector-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1">
+              <!-- Dynamically rendered week cards -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right 1 Col: Test Settings & Launch Panel -->
+        <div class="space-y-6">
+          <div class="sticky top-24 bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-lg space-y-6">
+            
+            <div class="border-b border-slate-200 dark:border-slate-800 pb-4">
+              <h3 class="text-base font-extrabold flex items-center space-x-2">
+                <i data-lucide="settings-2" class="w-4 h-4 text-brand-600"></i>
+                <span>Test Settings & Launch</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-1">Configure your custom quiz parameters</p>
+            </div>
+
+            <!-- Question Count Selector -->
+            <div>
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Question Count</label>
+              <div class="grid grid-cols-3 gap-2 mb-2">
+                <button type="button" onclick="app.setQuestionCount(10)" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition">10 Qs</button>
+                <button type="button" onclick="app.setQuestionCount(20)" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition">20 Qs</button>
+                <button type="button" onclick="app.setQuestionCount(30)" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border-2 border-brand-500 bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 font-bold transition">30 Qs</button>
+                <button type="button" onclick="app.setQuestionCount(50)" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition">50 Qs</button>
+                <button type="button" onclick="app.setQuestionCount(100)" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition">100 Qs</button>
+                <button type="button" onclick="app.setQuestionCount('all')" class="q-count-btn px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 transition">All (<span id="all-count-indicator">478</span>)</button>
+              </div>
+            </div>
+
+            <!-- Timer Selector (for Exam Mode) -->
+            <div id="timer-setting-container" class="hidden">
+              <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Exam Timer</label>
+              <select id="exam-timer-select" class="w-full text-xs font-semibold px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-brand-500">
+                <option value="15">15 Minutes (Rapid)</option>
+                <option value="30" selected>30 Minutes (Standard)</option>
+                <option value="45">45 Minutes</option>
+                <option value="60">60 Minutes (NPTEL Simulated)</option>
+                <option value="0">Untimed</option>
+              </select>
+            </div>
+
+            <!-- Toggles (Randomize, Negative marking) -->
+            <div class="space-y-3 pt-2">
+              <label class="flex items-center justify-between text-xs cursor-pointer">
+                <span class="text-slate-700 dark:text-slate-300 font-medium">Shuffle Questions</span>
+                <input type="checkbox" id="shuffle-questions-toggle" checked class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+              </label>
+              <label class="flex items-center justify-between text-xs cursor-pointer">
+                <span class="text-slate-700 dark:text-slate-300 font-medium">Shuffle Options</span>
+                <input type="checkbox" id="shuffle-options-toggle" checked class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+              </label>
+            </div>
+
+            <!-- Matching Pool Summary Box -->
+            <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs space-y-1.5">
+              <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                <span>Matching Questions:</span>
+                <span class="font-extrabold text-brand-600 dark:text-brand-400 text-sm" id="matching-pool-count">478</span>
+              </div>
+              <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                <span>Test Size:</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200" id="selected-test-count">30 Questions</span>
+              </div>
+            </div>
+
+            <!-- Primary Action Launch Button -->
+            <button type="button" onclick="app.startTest()" id="start-test-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center space-x-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+              <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+              <span id="start-btn-label">Start Practice Session</span>
+            </button>
+            
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: ACTIVE TEST / QUIZ ARENA           -->
+    <!-- ========================================== -->
+    <div id="view-quiz" class="view-panel hidden space-y-6">
+      
+      <!-- Top Test Status Bar -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        
+        <!-- Left: Current Question & Mode badge -->
+        <div class="flex items-center space-x-3">
+          <button onclick="app.confirmQuitTest()" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition" title="Exit Quiz">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </button>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-sm font-extrabold text-slate-900 dark:text-white" id="quiz-progress-text">Question 1 of 30</span>
+              <span id="quiz-mode-pill" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Practice</span>
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 font-medium" id="quiz-current-category">Week 1: Concept of Learning</div>
+          </div>
+        </div>
+
+        <!-- Center: Visual Progress Bar -->
+        <div class="w-full sm:w-64 order-3 sm:order-2">
+          <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+            <div id="quiz-progress-bar" class="bg-gradient-to-r from-brand-600 to-indigo-500 h-2.5 rounded-full transition-all duration-300" style="width: 3.33%;"></div>
+          </div>
+        </div>
+
+        <!-- Right: Timer, Bookmark & Palette toggle -->
+        <div class="flex items-center space-x-2 sm:space-x-3 order-2 sm:order-3 ml-auto">
+          <!-- Timer (if active) -->
+          <div id="quiz-timer-badge" class="hidden items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 font-mono font-bold text-xs border border-amber-200 dark:border-amber-800">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+            <span id="quiz-timer-display">29:59</span>
+          </div>
+
+          <!-- Star / Bookmark Button -->
+          <button onclick="app.toggleCurrentBookmark()" id="quiz-bookmark-btn" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition" title="Bookmark for Revision">
+            <i data-lucide="bookmark" class="w-4 h-4"></i>
+          </button>
+
+          <!-- Toggle Question Palette Drawer -->
+          <button onclick="app.togglePaletteDrawer()" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold text-xs flex items-center space-x-1.5">
+            <i data-lucide="grid" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Palette</span>
+          </button>
+
+          <!-- Finish / Submit Button -->
+          <button onclick="app.submitTestConfirm()" class="px-3.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-sm flex items-center space-x-1">
+            <span>Submit</span>
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Question Layout (Question Card + Collapsible Palette) -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        
+        <!-- Center Question Card (3 cols) -->
+        <div class="lg:col-span-3 space-y-6">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm relative space-y-6">
+            
+            <!-- Metadata Tags (Source year, Week tag, Q-type) -->
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="q-year-badge" class="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">2026 Current</span>
+              <span id="q-week-badge" class="px-2.5 py-1 rounded-md text-xs font-bold bg-brand-100 text-brand-800 dark:bg-brand-900/60 dark:text-brand-300">Week 1</span>
+              <span id="q-type-badge" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300">Single Choice (MCQ)</span>
+              <span id="q-id-badge" class="ml-auto text-[11px] font-mono text-slate-400">#2026-w01-q01</span>
+            </div>
+
+            <!-- Question Text -->
+            <div class="text-base sm:text-lg lg:text-xl font-bold text-slate-900 dark:text-slate-50 leading-relaxed" id="q-text">
+              Loading question...
+            </div>
+
+            <!-- Options Container -->
+            <div class="space-y-3" id="q-options-container">
+              <!-- Dynamically populated options -->
+            </div>
+
+            <!-- Explanation / Solution Box (Revealed in practice mode or after answering) -->
+            <div id="q-explanation-box" class="hidden p-4 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm space-y-2 animate-fade-in">
+              <div class="flex items-center space-x-2 font-bold text-brand-600 dark:text-brand-400">
+                <i data-lucide="info" class="w-4 h-4"></i>
+                <span>Lecture Reference & Solution</span>
+              </div>
+              <p class="text-slate-700 dark:text-slate-300 leading-relaxed" id="q-explanation-text">
+                Reference goes here...
+              </p>
+              <div class="text-[11px] text-slate-400 font-medium" id="q-source-text">
+                Source: Psychology of Learning Assignment
+              </div>
+            </div>
+
+            <!-- Bottom Question Nav Controls -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <button onclick="app.prevQuestion()" id="btn-prev-q" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center space-x-1.5 transition">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                <span>Previous</span>
+              </button>
+
+              <div class="flex items-center space-x-2">
+                <button onclick="app.clearCurrentResponse()" class="px-3 py-2 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition">
+                  Clear Choice
+                </button>
+                <button onclick="app.toggleCurrentFlag()" id="btn-flag-q" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 transition flex items-center space-x-1">
+                  <i data-lucide="flag" class="w-3.5 h-3.5"></i>
+                  <span>Flag</span>
+                </button>
+              </div>
+
+              <button onclick="app.nextQuestion()" id="btn-next-q" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-1.5 shadow-sm transition">
+                <span>Next</span>
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right Side: Question Palette Panel (1 col) -->
+        <div id="palette-drawer" class="lg:block bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+            <h4 class="font-extrabold text-sm">Question Palette</h4>
+            <span class="text-xs text-slate-500" id="palette-stats-summary">0 / 30 Answered</span>
+          </div>
+
+          <!-- Legend -->
+          <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+            <div class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded bg-brand-600"></span>
+              <span>Answered</span>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded bg-amber-500"></span>
+              <span>Flagged</span>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700"></span>
+              <span>Not Visited</span>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="w-3 h-3 rounded bg-emerald-500"></span>
+              <span>Correct (Prac)</span>
+            </div>
+          </div>
+
+          <!-- Numbers Grid -->
+          <div id="palette-buttons-grid" class="grid grid-cols-5 gap-2 max-h-[380px] overflow-y-auto pr-1">
+            <!-- Dynamically populated buttons -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 3: SCORECARD & TEST RESULTS           -->
+    <!-- ========================================== -->
+    <div id="view-results" class="view-panel hidden space-y-8 animate-fade-in">
+      
+      <!-- Scorecard Header Card -->
+      <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-800 shadow-xl relative overflow-hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+          
+          <!-- Score Gauge / Percentage Chart -->
+          <div class="text-center md:border-r border-slate-200 dark:border-slate-800 md:pr-8">
+            <div class="relative inline-block">
+              <svg viewBox="0 0 36 36" class="circular-chart w-36 h-36">
+                <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path id="score-circle-path" class="circle stroke-brand-600" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white" id="score-percentage-text">0%</span>
+                <span class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Score</span>
+              </div>
+            </div>
+            <div class="mt-3">
+              <span id="score-grade-badge" class="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Passed</span>
+            </div>
+          </div>
+
+          <!-- Middle: Summary Metrics -->
+          <div class="space-y-4 md:col-span-2">
+            <div>
+              <span class="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-widest">Test Evaluation Report</span>
+              <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1" id="score-verdict-title">Outstanding Performance!</h2>
+              <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1" id="score-verdict-subtitle">You have demonstrated strong grasp over the selected topics.</p>
+            </div>
+
+            <!-- 4 Metric Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                <div class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400" id="stat-correct-count">0</div>
+                <div class="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Correct</div>
+              </div>
+              <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                <div class="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400" id="stat-wrong-count">0</div>
+                <div class="text-[11px] font-semibold text-rose-800 dark:text-rose-300">Incorrect</div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <div class="text-xl sm:text-2xl font-black text-slate-600 dark:text-slate-300" id="stat-unanswered-count">0</div>
+                <div class="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Skipped</div>
+              </div>
+              <div class="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                <div class="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400" id="stat-time-spent">0m 0s</div>
+                <div class="text-[11px] font-semibold text-indigo-800 dark:text-indigo-300">Time Taken</div>
+              </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="flex flex-wrap items-center gap-3 pt-4">
+              <button onclick="app.retryMissedQuestions()" id="btn-retry-missed" class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-2 shadow-sm transition">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>Retry Missed Questions (<span id="retry-missed-count">0</span>)</span>
+              </button>
+              <button onclick="app.retakeSameTest()" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs sm:text-sm flex items-center space-x-2 transition">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                <span>Retake Test</span>
+              </button>
+              <button onclick="app.showView('builder')" class="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs sm:text-sm flex items-center space-x-2 shadow-sm transition">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Configure New Test</span>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Week-by-Week Mastery Breakdown -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-extrabold text-base flex items-center space-x-2">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 text-brand-600"></i>
+            <span>Unit-by-Unit Performance Breakdown</span>
+          </h3>
+          <span class="text-xs text-slate-500">Identifies strengths & weak concepts</span>
+        </div>
+        <div id="results-week-breakdown" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <!-- Dynamically populated week progress items -->
+        </div>
+      </div>
+
+      <!-- Question-by-Question Review Section -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div>
+            <h3 class="font-extrabold text-lg">Detailed Question Review</h3>
+            <p class="text-xs text-slate-500">Examine correct answers and slide references for each problem</p>
+          </div>
+          <!-- Filter Tabs -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <button onclick="app.setReviewFilter('all')" id="rf-all" class="rf-btn px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-950/80 dark:text-brand-300 font-bold border border-brand-200 dark:border-brand-800">All (<span id="rf-count-all">0</span>)</button>
+            <button onclick="app.setReviewFilter('wrong')" id="rf-wrong" class="rf-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">Incorrect (<span id="rf-count-wrong">0</span>)</button>
+            <button onclick="app.setReviewFilter('correct')" id="rf-correct" class="rf-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">Correct (<span id="rf-count-correct">0</span>)</button>
+            <button onclick="app.setReviewFilter('skipped')" id="rf-skipped" class="rf-btn px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">Skipped (<span id="rf-count-skipped">0</span>)</button>
+          </div>
+        </div>
+
+        <!-- Review Question Cards List -->
+        <div id="results-review-list" class="space-y-6">
+          <!-- Dynamically populated review cards -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 4: QUESTION EXPLORER & SEARCH BANK   -->
+    <!-- ========================================== -->
+    <div id="view-explorer" class="view-panel hidden space-y-6 animate-fade-in">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Question Bank Explorer</h2>
+          <p class="text-xs text-slate-500">Search and browse all 478 Psychology of Learning questions</p>
+        </div>
+
+        <!-- Search Bar and Filters -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-1 relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+            <input type="text" id="explorer-search-input" oninput="app.filterExplorer()" placeholder="Search Pavlov, Goleman, concept..." class="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <select id="explorer-year-select" onchange="app.filterExplorer()" class="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm">
+              <option value="all">All Years (2023-2026)</option>
+              <option value="2026">2026 Current Assignments</option>
+              <option value="2025">2025 Assignment PYQs</option>
+              <option value="2024">2024 Assignment PYQs</option>
+              <option value="2023">2023 Assignment PYQs</option>
+            </select>
+          </div>
+          <div>
+            <select id="explorer-week-select" onchange="app.filterExplorer()" class="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm">
+              <option value="all">All Weeks (0 to 12)</option>
+              <!-- Filled via JS -->
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <span>Found <span id="explorer-match-count" class="font-bold text-brand-600">478</span> questions</span>
+        </div>
+      </div>
+
+      <!-- Explorer Cards Container -->
+      <div id="explorer-cards-list" class="space-y-4">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 5: FLASHCARD ACTIVE RECALL MODE       -->
+    <!-- ========================================== -->
+    <div id="view-flashcards" class="view-panel hidden space-y-6 animate-fade-in">
+      <div class="max-w-2xl mx-auto space-y-6 text-center">
+        <div>
+          <span class="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-widest">Active Recall Mode</span>
+          <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">Concept Flashcards</h2>
+          <p class="text-xs text-slate-500">Flip card to test your memory of the question and answer</p>
+        </div>
+
+        <!-- Flashcard Progress -->
+        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 max-w-sm mx-auto">
+          <span id="fc-progress-text">Card 1 of 50</span>
+          <span id="fc-category-badge" class="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300">Week 1</span>
+        </div>
+
+        <!-- 3D Flipping Card Container -->
+        <div class="perspective-1000 w-full min-h-[340px] cursor-pointer" onclick="app.flipFlashcard()">
+          <div id="flashcard-inner" class="transform-style-3d transition-transform duration-500 w-full min-h-[340px] relative rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 flex flex-col justify-between">
+            
+            <!-- Front Side -->
+            <div id="fc-front" class="backface-hidden flex-1 flex flex-col justify-center items-center space-y-4">
+              <span class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">QUESTION</span>
+              <p class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-relaxed" id="fc-question-text">
+                Question text appears here...
+              </p>
+              <p class="text-xs text-slate-400 mt-4 flex items-center space-x-1">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                <span>Click anywhere to flip and reveal answer</span>
+              </p>
+            </div>
+
+            <!-- Back Side (hidden until flipped) -->
+            <div id="fc-back" class="rotate-y-180 backface-hidden absolute inset-0 p-8 rounded-3xl bg-gradient-to-tr from-brand-900 to-indigo-900 text-white flex flex-col justify-center items-center space-y-4">
+              <span class="text-xs font-bold px-3 py-1 rounded-full bg-white/20 text-emerald-300">ANSWER</span>
+              <div class="text-xl sm:text-2xl font-black text-emerald-300" id="fc-answer-text">
+                Option C: Classical Conditioning
+              </div>
+              <p class="text-xs sm:text-sm text-brand-100 max-w-md leading-relaxed" id="fc-explanation-text">
+                Lecture notes explanation...
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center justify-center space-x-4 pt-2">
+          <button onclick="app.prevFlashcard()" class="p-3 rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-sm transition">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+          </button>
+          <button onclick="app.flipFlashcard()" class="px-5 py-2.5 rounded-full bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md transition flex items-center space-x-1.5">
+            <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
+            <span>Flip Card</span>
+          </button>
+          <button onclick="app.nextFlashcard()" class="p-3 rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-sm transition">
+            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 6: MISTAKE VAULT (SPACED REPETITION)  -->
+    <!-- ========================================== -->
+    <div id="view-mistakes" class="view-panel hidden space-y-6 animate-fade-in">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <div class="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            </div>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Mistakes Vault</h2>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Questions you answered incorrectly in past tests. Practice them to build mastery!</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button onclick="app.practiceMistakes()" id="btn-practice-all-mistakes" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-sm flex items-center space-x-1.5 transition">
+            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+            <span>Practice All Mistakes (<span id="vault-mistakes-count">0</span>)</span>
+          </button>
+          <button onclick="app.clearMistakesVault()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            Clear Vault
+          </button>
+        </div>
+      </div>
+
+      <div id="mistakes-cards-list" class="space-y-4">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 7: BOOKMARKS REVISION VAULT           -->
+    <!-- ========================================== -->
+    <div id="view-bookmarks" class="view-panel hidden space-y-6 animate-fade-in">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <i data-lucide="bookmark" class="w-4 h-4"></i>
+            </div>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Starred Bookmarks</h2>
+          </div>
+          <p class="text-xs text-slate-500 mt-1">Questions you marked for revision</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button onclick="app.practiceBookmarks()" id="btn-practice-bookmarks" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm flex items-center space-x-1.5 transition">
+            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+            <span>Practice Starred (<span id="vault-bookmarks-count">0</span>)</span>
+          </button>
+          <button onclick="app.clearBookmarksVault()" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      <div id="bookmarks-cards-list" class="space-y-4">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Confirm Submit Modal -->
+  <div id="modal-submit" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 animate-fade-in">
+      <div class="flex items-center space-x-3 text-amber-500">
+        <i data-lucide="help-circle" class="w-6 h-6"></i>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Submit Test Evaluation?</h3>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed" id="modal-submit-summary-text">
+        You have answered 25 of 30 questions. Are you sure you want to finish and generate your scorecard?
+      </p>
+      <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <button onclick="app.closeSubmitModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          Resume Test
+        </button>
+        <button onclick="app.finalizeTestSubmission()" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md transition">
+          Confirm & View Results
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-400 no-print">
+    <p>Psychology of Learning • NPTEL Assignment Practice Platform • Covers 2023, 2024, 2025 PYQs & 2026 Current Assignments</p>
+  </footer>
+
+  <!-- Load Data Files -->
+  <script src="data/topics.js"></script>
+  <script src="data/questions-data.js"></script>
+  
+  <!-- Load Main Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
