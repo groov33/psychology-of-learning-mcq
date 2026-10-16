@@ -8,6 +8,12 @@ class QuizApp {
     this.questions = window.NPTEL_QUESTIONS || [];
     this.topics = window.WEEK_TOPICS || {};
     
+    // Quick question lookup index by ID
+    this.questionsById = {};
+    this.questions.forEach(q => {
+      this.questionsById[q.id] = q;
+    });
+
     // Config state
     this.selectedYears = new Set(['2026', '2025', '2024', '2023']);
     this.selectedWeeks = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -23,7 +29,7 @@ class QuizApp {
     
     // LocalStorage Persistent Stores
     this.bookmarks = new Set(JSON.parse(localStorage.getItem('psych_bookmarks') || '[]'));
-    this.mistakes = JSON.parse(localStorage.getItem('psych_mistakes') || '{}');
+    this.mistakes = this.loadMistakesFromStorage();
     this.history = JSON.parse(localStorage.getItem('psych_history') || '[]');
     
     // Flashcard state
@@ -45,6 +51,17 @@ class QuizApp {
     this.initKeyboardShortcuts();
     this.showView('builder');
     
+    // Cross-tab storage synchronization
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'psych_mistakes') {
+        this.mistakes = this.loadMistakesFromStorage();
+        this.updateNavBadges();
+        if (this.currentView === 'mistakes') {
+          this.renderMistakesView();
+        }
+      }
+    });
+
     // Lucide Icons initialization
     if (window.lucide) {
       window.lucide.createIcons();
@@ -134,6 +151,16 @@ class QuizApp {
       }
     }
 
+    const mobMBadge = document.getElementById('mobile-mistakes-badge');
+    if (mobMBadge) {
+      if (mCount > 0) {
+        mobMBadge.textContent = mCount;
+        mobMBadge.classList.remove('hidden');
+      } else {
+        mobMBadge.classList.add('hidden');
+      }
+    }
+
     const bBadge = document.getElementById('nav-bookmarks-badge');
     if (bBadge) {
       if (bCount > 0) {
@@ -143,6 +170,232 @@ class QuizApp {
         bBadge.classList.add('hidden');
       }
     }
+
+    const mobBBadge = document.getElementById('mobile-bookmarks-badge');
+    if (mobBBadge) {
+      if (bCount > 0) {
+        mobBBadge.textContent = bCount;
+        mobBBadge.classList.remove('hidden');
+      } else {
+        mobBBadge.classList.add('hidden');
+      }
+    }
+  }
+
+  // ==========================================
+  // TOAST NOTIFICATIONS
+  // ==========================================
+  showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'pointer-events-auto flex items-center justify-between p-3.5 rounded-xl shadow-lg border text-xs sm:text-sm font-medium transition-all transform duration-300 translate-y-2 opacity-0';
+
+    let iconName = 'info';
+    if (type === 'success') {
+      toast.className += ' bg-emerald-50 dark:bg-emerald-950/80 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200';
+      iconName = 'check-circle';
+    } else if (type === 'error') {
+      toast.className += ' bg-rose-50 dark:bg-rose-950/80 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200';
+      iconName = 'alert-triangle';
+    } else {
+      toast.className += ' bg-slate-900 dark:bg-slate-800 border-slate-700 text-white';
+      iconName = 'info';
+    }
+
+    toast.innerHTML = `
+      <div class="flex items-center space-x-2.5 mr-2">
+        <i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i>
+        <span>${message}</span>
+      </div>
+      <button class="text-slate-400 hover:text-slate-200 shrink-0 p-1" onclick="this.parentElement.remove()">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    `;
+
+    container.appendChild(toast);
+    if (window.lucide) window.lucide.createIcons({ root: toast });
+
+    // Animate in
+    const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 16));
+    raf(() => {
+      toast.classList.remove('translate-y-2', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+    });
+
+    // Auto remove after 3.5 seconds
+    setTimeout(() => {
+      toast.classList.remove('translate-y-0', 'opacity-100');
+      toast.classList.add('translate-y-2', 'opacity-0');
+      setTimeout(() => {
+        if (toast.parentElement) toast.parentElement.removeChild(toast);
+      }, 300);
+    }, 3500);
+  }
+
+  // ==========================================
+  // QUESTION LOOKUP HELPER
+  // ==========================================
+  findQuestionById(id) {
+    if (!id) return null;
+    if (this.questionsById && this.questionsById[id]) {
+      return this.questionsById[id];
+    }
+    if (this.questions && Array.isArray(this.questions)) {
+      return this.questions.find(q => q.id === id) || null;
+    }
+    return null;
+  }
+
+  // ==========================================
+  // MISTAKE VAULT PERSISTENCE & FORMAT NORMALIZER
+  // ==========================================
+  normalizeMistakesData(raw) {
+    const result = {};
+    if (!raw) return result;
+
+    let source = raw;
+    if (typeof source === 'object' && !Array.isArray(source)) {
+      if (source.mistakes && typeof source.mistakes === 'object') {
+        source = source.mistakes;
+      } else if (source.vault && typeof source.vault === 'object') {
+        source = source.vault;
+      } else if (source.questions && (Array.isArray(source.questions) || typeof source.questions === 'object')) {
+        source = source.questions;
+      }
+    }
+
+    if (Array.isArray(source)) {
+      source.forEach(item => {
+        if (!item) return;
+        let qId = null;
+        let count = 1;
+        let addedAt = Date.now();
+        let questionObj = null;
+
+        if (typeof item === 'string') {
+          qId = item.trim();
+        } else if (typeof item === 'object') {
+          if (item.id) {
+            qId = item.id;
+            questionObj = item;
+            count = item.count || 1;
+            addedAt = item.addedAt || Date.now();
+          } else if (item.question && item.question.id) {
+            qId = item.question.id;
+            questionObj = item.question;
+            count = item.count || 1;
+            addedAt = item.addedAt || Date.now();
+          }
+        }
+
+        if (qId) {
+          const canonical = this.findQuestionById(qId) || questionObj;
+          if (canonical) {
+            result[qId] = {
+              id: qId,
+              question: canonical,
+              count: Number(count) || 1,
+              addedAt: Number(addedAt) || Date.now()
+            };
+          }
+        }
+      });
+    } else if (typeof source === 'object') {
+      for (const [key, val] of Object.entries(source)) {
+        if (!val) continue;
+        let qId = key;
+        let count = 1;
+        let addedAt = Date.now();
+        let questionObj = null;
+
+        if (typeof val === 'number') {
+          count = val;
+        } else if (typeof val === 'object') {
+          if (val.question && val.question.id) {
+            qId = val.question.id;
+            questionObj = val.question;
+            count = val.count || 1;
+            addedAt = val.addedAt || Date.now();
+          } else if (val.id) {
+            qId = val.id;
+            questionObj = val;
+            count = val.count || 1;
+            addedAt = val.addedAt || Date.now();
+          } else if (val.count !== undefined) {
+            count = val.count || 1;
+            addedAt = val.addedAt || Date.now();
+            if (val.question) questionObj = val.question;
+          }
+        }
+
+        const canonical = this.findQuestionById(qId) || questionObj;
+        if (canonical) {
+          result[qId] = {
+            id: qId,
+            question: canonical,
+            count: Number(count) || 1,
+            addedAt: Number(addedAt) || Date.now()
+          };
+        }
+      }
+    }
+
+    return result;
+  }
+
+  loadMistakesFromStorage() {
+    const candidateKeys = [
+      'psych_mistakes',
+      'psychology_mistakes',
+      'nptel_mistakes',
+      'mistakes_vault',
+      'mistakes'
+    ];
+
+    let merged = {};
+
+    for (const key of candidateKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const normalized = this.normalizeMistakesData(parsed);
+        for (const [id, item] of Object.entries(normalized)) {
+          if (!merged[id]) {
+            merged[id] = item;
+          } else {
+            merged[id].count = Math.max(merged[id].count || 1, item.count || 1);
+            merged[id].addedAt = Math.min(merged[id].addedAt || Date.now(), item.addedAt || Date.now());
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not read mistakes from storage key "${key}":`, err);
+      }
+    }
+
+    // Re-hydrate canonical questions
+    for (const id in merged) {
+      const canonical = this.findQuestionById(id);
+      if (canonical) {
+        merged[id].question = canonical;
+      }
+    }
+
+    // Consolidate into primary key and safely retire legacy keys so deleted items are not resurrected
+    try {
+      localStorage.setItem('psych_mistakes', JSON.stringify(merged));
+      candidateKeys.forEach(k => {
+        if (k !== 'psych_mistakes') {
+          try { localStorage.removeItem(k); } catch (e) {}
+        }
+      });
+    } catch (e) {
+      console.warn("Storage error saving consolidated mistakes:", e);
+    }
+
+    return merged;
   }
 
   // ==========================================
@@ -595,11 +848,6 @@ class QuizApp {
       if (!isCorrect) {
         // Add to mistakes vault
         this.addMistake(q);
-      } else if (this.mistakes[q.id]) {
-        // If answered correctly in practice, remove or decrement
-        delete this.mistakes[q.id];
-        localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
-        this.updateNavBadges();
       }
     }
 
@@ -752,10 +1000,6 @@ class QuizApp {
         if (isRight) {
           correct++;
           weekScores[q.week].correct++;
-          // remove from mistakes vault if mastered
-          if (this.mistakes[q.id]) {
-            delete this.mistakes[q.id];
-          }
         } else {
           wrong++;
           this.addMistake(q);
@@ -763,7 +1007,6 @@ class QuizApp {
       }
     });
 
-    localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
     this.updateNavBadges();
 
     const total = questions.length;
@@ -1170,76 +1413,315 @@ class QuizApp {
   // MISTAKE VAULT & BOOKMARKS
   // ==========================================
   addMistake(question) {
-    if (!this.mistakes[question.id]) {
-      this.mistakes[question.id] = {
-        question: question,
+    if (!question || !question.id) return;
+    const qId = question.id;
+    const canonicalQ = this.findQuestionById(qId) || question;
+
+    if (!this.mistakes[qId]) {
+      this.mistakes[qId] = {
+        id: qId,
+        question: canonicalQ,
         count: 1,
         addedAt: Date.now()
       };
     } else {
-      this.mistakes[question.id].count++;
+      this.mistakes[qId].count = (this.mistakes[qId].count || 0) + 1;
+      this.mistakes[qId].question = canonicalQ;
     }
-    localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+
+    try {
+      localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+    } catch (e) {
+      console.warn("Storage error in addMistake:", e);
+    }
     this.updateNavBadges();
   }
 
   renderMistakesView() {
     const keys = Object.keys(this.mistakes);
-    document.getElementById('vault-mistakes-count').textContent = keys.length;
-    const btn = document.getElementById('btn-practice-all-mistakes');
-    btn.disabled = keys.length === 0;
-    btn.classList.toggle('opacity-50', keys.length === 0);
+    const countEl = document.getElementById('vault-mistakes-count');
+    if (countEl) countEl.textContent = keys.length;
+
+    const practiceBtn = document.getElementById('btn-practice-all-mistakes');
+    if (practiceBtn) {
+      practiceBtn.disabled = keys.length === 0;
+      practiceBtn.classList.toggle('opacity-50', keys.length === 0);
+      practiceBtn.classList.toggle('cursor-not-allowed', keys.length === 0);
+    }
+
+    const exportBtn = document.getElementById('btn-export-mistakes');
+    if (exportBtn) {
+      exportBtn.disabled = keys.length === 0;
+      exportBtn.classList.toggle('opacity-50', keys.length === 0);
+      exportBtn.classList.toggle('cursor-not-allowed', keys.length === 0);
+    }
 
     const container = document.getElementById('mistakes-cards-list');
+    if (!container) return;
+
     if (keys.length === 0) {
       container.innerHTML = `
-        <div class="text-center py-12 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-slate-400">
-          <i data-lucide="check-circle" class="w-8 h-8 mx-auto mb-2 text-emerald-500"></i>
-          <p class="font-bold">No recorded mistakes!</p>
-          <p class="text-xs mt-1">Questions you answer incorrectly will automatically gather here for focused revision.</p>
+        <div class="text-center py-12 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-slate-400 space-y-3">
+          <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-emerald-500"></i>
+          <p class="font-bold text-slate-700 dark:text-slate-200">No recorded mistakes!</p>
+          <p class="text-xs max-w-sm mx-auto">Questions you answer incorrectly will automatically gather here for focused revision. If you have an exported backup JSON, you can restore it anytime.</p>
+          <div class="pt-2">
+            <button onclick="document.getElementById('import-mistakes-file-input').click()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition active:scale-95 shadow-sm">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+              <span>Import Backup JSON</span>
+            </button>
+          </div>
         </div>
       `;
       if (window.lucide) window.lucide.createIcons();
       return;
     }
 
+    // Sort mistakes by missed count descending, then by addedAt descending
+    const sortedKeys = [...keys].sort((a, b) => {
+      const countA = this.mistakes[a].count || 1;
+      const countB = this.mistakes[b].count || 1;
+      if (countB !== countA) return countB - countA;
+      return (this.mistakes[b].addedAt || 0) - (this.mistakes[a].addedAt || 0);
+    });
+
     let html = '';
-    keys.forEach(k => {
+    sortedKeys.forEach(k => {
       const item = this.mistakes[k];
-      const q = item.question;
+      const q = this.findQuestionById(k) || item.question;
+      if (!q) return;
+
       html += `
-        <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-rose-100 dark:border-rose-900/40 shadow-sm space-y-3">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-rose-100 dark:border-rose-900/40 shadow-sm space-y-3 transition hover:shadow-md">
           <div class="flex items-center justify-between text-xs">
             <span class="font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 px-2.5 py-1 rounded-md">
               Missed ${item.count} ${item.count === 1 ? 'time' : 'times'}
             </span>
-            <span class="text-slate-500">${q.year} • Week ${q.week}</span>
+            <div class="flex items-center space-x-2">
+              <span class="text-slate-500">${q.year} • Week ${q.week}</span>
+              <button onclick="app.removeMistake('${q.id}')" class="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 font-semibold text-xs ml-2 transition" title="Remove question from Mistakes Vault">
+                Remove
+              </button>
+            </div>
           </div>
-          <div class="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100">${q.question}</div>
+          <div class="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 leading-snug">${q.question}</div>
           <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-            Correct Answer: ${q.answer.join(', ')}
+            Correct Answer: ${Array.isArray(q.answer) ? q.answer.join(', ') : q.answer}
           </div>
-          <div class="text-xs text-slate-500">${q.explanation || ''}</div>
+          ${q.explanation ? `<div class="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">${q.explanation}</div>` : ''}
         </div>
       `;
     });
+
     container.innerHTML = html;
     if (window.lucide) window.lucide.createIcons();
   }
 
+  removeMistake(qId) {
+    if (!qId || !this.mistakes[qId]) return;
+    delete this.mistakes[qId];
+    try {
+      localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+    } catch (e) {
+      console.error("Storage error removing mistake:", e);
+    }
+    this.updateNavBadges();
+    this.renderMistakesView();
+    this.showToast("Question removed from Mistakes Vault.", "info");
+  }
+
   practiceMistakes() {
-    const list = Object.values(this.mistakes).map(m => m.question);
+    const list = Object.keys(this.mistakes).map(id => this.findQuestionById(id) || this.mistakes[id].question).filter(Boolean);
     if (list.length === 0) return;
     this.startTest(list);
   }
 
   clearMistakesVault() {
-    if (confirm("Are you sure you want to clear all questions from your Mistakes Vault?")) {
+    const count = Object.keys(this.mistakes).length;
+    if (count === 0) {
+      this.showToast("Mistakes Vault is already empty.", "info");
+      return;
+    }
+    if (confirm(`Are you sure you want to clear all ${count} questions from your Mistakes Vault? You can export a backup first if you want to keep them.`)) {
       this.mistakes = {};
-      localStorage.removeItem('psych_mistakes');
+      const possibleKeys = ['psych_mistakes', 'psychology_mistakes', 'nptel_mistakes', 'mistakes_vault', 'mistakes'];
+      possibleKeys.forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
       this.updateNavBadges();
       this.renderMistakesView();
+      this.showToast("Mistakes Vault cleared.", "info");
     }
+  }
+
+  exportMistakesVault() {
+    // 1. Re-read storage and merge with current memory to guarantee zero data loss
+    const storedMistakes = this.loadMistakesFromStorage();
+    this.mistakes = { ...storedMistakes, ...this.mistakes };
+
+    try {
+      localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+    } catch (e) {
+      console.warn("Storage write error during export:", e);
+    }
+    this.updateNavBadges();
+
+    const mistakeKeys = Object.keys(this.mistakes);
+    if (mistakeKeys.length === 0) {
+      this.showToast("Your Mistakes Vault is currently empty. No mistakes found to export.", "info");
+      return;
+    }
+
+    // Hydrate canonical question objects
+    const exportVault = {};
+    mistakeKeys.forEach(id => {
+      const entry = this.mistakes[id];
+      const canonicalQ = this.findQuestionById(id) || entry.question;
+      exportVault[id] = {
+        id: id,
+        count: entry.count || 1,
+        addedAt: entry.addedAt || Date.now(),
+        question: canonicalQ
+      };
+    });
+
+    const exportPayload = {
+      app: "NPTEL Psychology of Learning MCQ Mastery Platform",
+      schemaVersion: "2.0",
+      exportDate: new Date().toISOString(),
+      timestamp: Date.now(),
+      totalMistakes: mistakeKeys.length,
+      mistakes: exportVault
+    };
+
+    try {
+      const jsonStr = JSON.stringify(exportPayload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `psych-learning-mistakes-vault-${dateStr}.json`;
+
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = url;
+      downloadAnchor.download = filename;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+      URL.revokeObjectURL(url);
+
+      this.showToast(`Exported ${mistakeKeys.length} mistakes to ${filename}!`, "success");
+    } catch (err) {
+      console.error("Export error:", err);
+      this.showToast("Failed to generate export file: " + err.message, "error");
+    }
+  }
+
+  handleImportMistakesFile(event) {
+    const file = event.target && event.target.files && event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result;
+        this.importMistakesData(content);
+      } catch (err) {
+        console.error("FileReader error:", err);
+        this.showToast("Could not read backup file: " + err.message, "error");
+      } finally {
+        event.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      this.showToast("Failed to read file from disk.", "error");
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  importMistakesData(jsonString) {
+    if (!jsonString || typeof jsonString !== 'string') {
+      this.showToast("No data provided to import.", "error");
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (err) {
+      console.error("JSON parse error:", err);
+      this.showToast("Invalid JSON file. Please ensure you are importing a valid Mistakes Vault backup.", "error");
+      return;
+    }
+
+    const importedMap = this.normalizeMistakesData(parsed);
+    const importedIds = Object.keys(importedMap);
+
+    if (importedIds.length === 0) {
+      this.showToast("No valid questions found in the imported file.", "error");
+      return;
+    }
+
+    // Crucial: Load and preserve ALL current/legacy mistakes first (ZERO DATA LOSS)
+    const storedMistakes = this.loadMistakesFromStorage();
+    const merged = { ...storedMistakes, ...this.mistakes };
+
+    let newCount = 0;
+    let updatedCount = 0;
+
+    importedIds.forEach(id => {
+      const incoming = importedMap[id];
+      const canonicalQ = this.findQuestionById(id) || incoming.question;
+
+      if (merged[id]) {
+        // Existed previously: NEVER delete or overwrite! Merge counts and preserve earliest date
+        const existing = merged[id];
+        const mergedCount = Math.max(existing.count || 1, incoming.count || 1);
+        const earliestDate = Math.min(existing.addedAt || Date.now(), incoming.addedAt || Date.now());
+
+        merged[id] = {
+          id: id,
+          count: mergedCount,
+          addedAt: earliestDate,
+          question: canonicalQ || existing.question
+        };
+        updatedCount++;
+      } else {
+        // Brand new entry from import
+        merged[id] = {
+          id: id,
+          count: incoming.count || 1,
+          addedAt: incoming.addedAt || Date.now(),
+          question: canonicalQ
+        };
+        newCount++;
+      }
+    });
+
+    // Update state and persistent storage
+    this.mistakes = merged;
+    try {
+      localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+    } catch (e) {
+      console.error("Failed to write imported mistakes to localStorage:", e);
+    }
+
+    this.updateNavBadges();
+    if (this.currentView === 'mistakes') {
+      this.renderMistakesView();
+    }
+
+    const totalInVault = Object.keys(this.mistakes).length;
+    let message = "";
+    if (newCount > 0 && updatedCount > 0) {
+      message = `Imported ${newCount} new question${newCount > 1 ? 's' : ''} & synced ${updatedCount} existing (${totalInVault} total in vault).`;
+    } else if (newCount > 0) {
+      message = `Successfully added ${newCount} question${newCount > 1 ? 's' : ''} to Mistakes Vault (${totalInVault} total).`;
+    } else {
+      message = `Synced ${updatedCount} question${updatedCount > 1 ? 's' : ''} with vault. All existing mistakes preserved (${totalInVault} total).`;
+    }
+
+    this.showToast(message, "success");
   }
 
   toggleBookmark(qId) {
