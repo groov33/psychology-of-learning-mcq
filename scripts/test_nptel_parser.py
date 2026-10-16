@@ -81,17 +81,23 @@ def parse_nptel_folder():
                 options = []
                 
             # Clean answer
-            # e.g. "C= Classical conditioning" or "a= Self-regulation" or "A, B"
+            # e.g. "C= Classical conditioning" or "a= all of the given"
             ans_keys = []
-            letter_matches = re.findall(r'\b([A-Ea-e])\b', raw_ans)
-            if letter_matches:
-                ans_keys = [l.upper() for l in letter_matches]
-            elif raw_ans:
-                # check if raw_ans matches any option text
+            if '=' in raw_ans:
+                ans_text = raw_ans.split('=', 1)[1].strip()
                 for opt in options:
-                    if opt['text'].lower() in raw_ans.lower() or raw_ans.lower() in opt['text'].lower():
-                        ans_keys.append(opt['key'])
+                    if opt['text'].lower().strip() == ans_text.lower().strip():
+                        ans_keys = [opt['key']]
                         break
+            if not ans_keys:
+                letter_matches = re.findall(r'\b([A-Ea-e])\b', raw_ans)
+                if letter_matches:
+                    ans_keys = [l.upper() for l in letter_matches]
+                elif raw_ans:
+                    for opt in options:
+                        if opt['text'].lower() in raw_ans.lower() or raw_ans.lower() in opt['text'].lower():
+                            ans_keys.append(opt['key'])
+                            break
                         
             # Normalize question text
             question_text = re.sub(r'^\s*QUESTION\s*\d+[:\s]*', '', question_text, flags=re.I).strip()

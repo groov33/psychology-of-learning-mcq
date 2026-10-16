@@ -44,6 +44,18 @@ def apply_curated_fixes(all_qs):
             q['answer'] = ['C']
             q['explanation'] = 'Please go through lecture notes of week-9 (slide no.19) for better understanding.'
             
+        # 1b. 2026-w06-q07
+        elif qid == '2026-w06-q07':
+            q['question'] = 'Which of the following is a facilitator of EQ?'
+            q['options'] = [
+                {'key': 'A', 'text': 'optimism'},
+                {'key': 'B', 'text': 'happiness'},
+                {'key': 'C', 'text': 'independence'},
+                {'key': 'D', 'text': 'all of the given'}
+            ]
+            q['answer'] = ['D']
+            q['explanation'] = 'Please go through lecture notes of week-6 (slide no.18) for better understanding. (Note: NPTEL assignment PDF had a typographical error stating "Ans. a=" instead of "Ans. d= all of the given").'
+            
         # 2. 2025-w03-q02
         elif qid == '2025-w03-q02':
             q['question'] = '____ refers to connections between the nerve cells.'
