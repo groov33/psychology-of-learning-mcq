@@ -33,6 +33,7 @@ class QuizApp {
     
     // Explorer state
     this.reviewFilter = 'all';
+    this.currentView = 'builder';
   }
 
   init() {
@@ -41,6 +42,7 @@ class QuizApp {
     this.populateExplorerWeeks();
     this.updateMatchCount();
     this.updateNavBadges();
+    this.initKeyboardShortcuts();
     this.showView('builder');
     
     // Lucide Icons initialization
@@ -79,6 +81,7 @@ class QuizApp {
   // VIEW NAVIGATION
   // ==========================================
   showView(viewId) {
+    this.currentView = viewId;
     const views = ['builder', 'quiz', 'results', 'explorer', 'flashcards', 'mistakes', 'bookmarks'];
     views.forEach(v => {
       const el = document.getElementById(`view-${v}`);
@@ -363,7 +366,7 @@ class QuizApp {
       chosen = this.shuffleArray(chosen);
     }
 
-    let size = this.questionCount === 'all' ? chosen.length : Math.min(this.questionCount, chosen.length);
+    let size = customQuestions ? chosen.length : (this.questionCount === 'all' ? chosen.length : Math.min(this.questionCount, chosen.length));
     chosen = chosen.slice(0, size);
 
     // Setup active test state
@@ -1024,10 +1027,9 @@ class QuizApp {
       if (year !== 'all' && q.year !== year) return false;
       if (week !== 'all' && String(q.week) !== week) return false;
       if (query) {
-        const inQ = q.question.toLowerCase().includes(query);
-        const inOpts = q.options.some(o => o.text.toLowerCase().includes(query));
-        const inExp = (q.explanation || '').toLowerCase().includes(query);
-        return inQ || inOpts || inExp;
+        const words = query.split(/\s+/).filter(Boolean);
+        const fullText = (q.question + ' ' + q.options.map(o => o.text).join(' ') + ' ' + (q.explanation || '')).toLowerCase();
+        return words.every(w => fullText.includes(w));
       }
       return true;
     });
@@ -1115,9 +1117,16 @@ class QuizApp {
   }
 
   renderFlashcard() {
-    if (this.fcQuestions.length === 0) return;
-    const q = this.fcQuestions[this.fcIndex];
     const total = this.fcQuestions.length;
+    if (total === 0) {
+      document.getElementById('fc-progress-text').textContent = `Card 0 of 0`;
+      document.getElementById('fc-category-badge').textContent = `None`;
+      document.getElementById('fc-question-text').textContent = 'No questions match your current year and week selection. Please select at least one week in the Test Builder.';
+      document.getElementById('fc-answer-text').textContent = 'N/A';
+      document.getElementById('fc-explanation-text').textContent = '';
+      return;
+    }
+    const q = this.fcQuestions[this.fcIndex];
 
     document.getElementById('fc-progress-text').textContent = `Card ${this.fcIndex + 1} of ${total}`;
     document.getElementById('fc-category-badge').textContent = `${q.year} • ${q.week === 0 ? 'Intro' : `Week ${q.week}`}`;
@@ -1298,6 +1307,60 @@ class QuizApp {
       this.updateNavBadges();
       this.renderBookmarksView();
     }
+  }
+
+  initKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+      // Don't trigger shortcuts if user is typing in an input, textarea or select
+      const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      const currentView = this.currentView;
+
+      if (currentView === 'quiz' && this.activeTest) {
+        const q = this.activeTest.questions[this.activeTest.currentIndex];
+        if (!q) return;
+
+        // Keys 1-5 or A-E to select option
+        const key = e.key.toUpperCase();
+        const digitIndex = parseInt(e.key, 10) - 1;
+        
+        let matchingOpt = null;
+        if (['A', 'B', 'C', 'D', 'E'].includes(key)) {
+          matchingOpt = q.options.find(o => o.key === key);
+        } else if (!isNaN(digitIndex) && digitIndex >= 0 && digitIndex < q.options.length) {
+          matchingOpt = q.options[digitIndex];
+        }
+
+        if (matchingOpt) {
+          e.preventDefault();
+          this.selectOption(matchingOpt.key);
+          return;
+        }
+
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          this.nextQuestion();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          this.prevQuestion();
+        } else if (e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          this.toggleCurrentFlag();
+        }
+      } else if (currentView === 'flashcards') {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          this.flipFlashcard();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          this.nextFlashcard();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          this.prevFlashcard();
+        }
+      }
+    });
   }
 }
 
