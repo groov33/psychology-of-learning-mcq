@@ -28,10 +28,12 @@ class QuizApp {
     this.timerInterval = null;
     this.autoAdvanceTimer = null;
     this._saveMistakesTimeout = null;
+    this._saveQuestionStatusTimeout = null;
     
     // LocalStorage Persistent Stores
     this.bookmarks = new Set(JSON.parse(localStorage.getItem('psych_bookmarks') || '[]'));
     this.mistakes = this.loadMistakesFromStorage();
+    this.questionStatus = this.loadQuestionStatusFromStorage();
     this.history = JSON.parse(localStorage.getItem('psych_history') || '[]');
     
     // Flashcard state
@@ -46,6 +48,7 @@ class QuizApp {
 
   init() {
     this.initTheme();
+    this.updateGlobalProgressUI();
     this.renderWeekSelectors();
     this.populateExplorerWeeks();
     this.updateMatchCount();
@@ -61,7 +64,21 @@ class QuizApp {
         if (this.currentView === 'mistakes') {
           this.renderMistakesView();
         }
+      } else if (e.key === 'psych_question_status') {
+        this.questionStatus = this.loadQuestionStatusFromStorage();
+        this.updateGlobalProgressUI();
+        this.renderWeekSelectors();
+        this.updateMatchCount();
+        if (this.currentView === 'explorer') {
+          this.filterExplorer();
+        }
       }
+    });
+
+    // Flush any pending question status saves on page unload
+    window.addEventListener('beforeunload', () => {
+      this.flushQuestionStatusSave();
+      this.flushMistakesSave();
     });
 
     // Lucide Icons initialization
@@ -347,20 +364,10 @@ class QuizApp {
     return result;
   }
 
-  flushMistakesSave() {
-    if (this._saveMistakesTimeout) {
-      clearTimeout(this._saveMistakesTimeout);
-      this._saveMistakesTimeout = null;
-      try {
-        localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
-      } catch (e) {
-        console.warn("Storage error in flushMistakesSave:", e);
-      }
-    }
-  }
-
   loadMistakesFromStorage() {
-    this.flushMistakesSave();
+    if (this._saveMistakesTimeout && this.mistakes) {
+      this.flushMistakesSave();
+    }
     const candidateKeys = [
       'psych_mistakes',
       'psychology_mistakes',
@@ -374,7 +381,7 @@ class QuizApp {
     for (const key of candidateKeys) {
       try {
         const raw = localStorage.getItem(key);
-        if (!raw) continue;
+        if (!raw || raw === 'undefined' || raw === 'null') continue;
         const parsed = JSON.parse(raw);
         const normalized = this.normalizeMistakesData(parsed);
         for (const [id, item] of Object.entries(normalized)) {
@@ -420,17 +427,30 @@ class QuizApp {
     const container = document.getElementById('weeks-selector-grid');
     if (!container) return;
 
-    // Count questions per week
+    // Count questions and done status per week for currently selected years
     const weekCounts = {};
+    const weekDoneCounts = {};
+    for (let w = 0; w <= 12; w++) {
+      weekCounts[w] = 0;
+      weekDoneCounts[w] = 0;
+    }
+
     this.questions.forEach(q => {
-      weekCounts[q.week] = (weekCounts[q.week] || 0) + 1;
+      if (this.selectedYears.has(q.year)) {
+        weekCounts[q.week] = (weekCounts[q.week] || 0) + 1;
+        if (this.questionStatus && this.questionStatus[q.id]) {
+          weekDoneCounts[q.week] = (weekDoneCounts[q.week] || 0) + 1;
+        }
+      }
     });
 
     let html = '';
     for (let w = 0; w <= 12; w++) {
       const topInfo = this.topics[w] || { title: `Week ${w}`, short: `Week ${w}`, concepts: [] };
       const count = weekCounts[w] || 0;
+      const doneCount = weekDoneCounts[w] || 0;
       const isChecked = this.selectedWeeks.has(w);
+      const isAllDone = count > 0 && doneCount === count;
 
       html += `
         <label class="week-checkbox-card cursor-pointer p-3 rounded-xl border-2 ${isChecked ? 'border-brand-500 bg-brand-50/40 dark:bg-brand-950/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'} hover:border-brand-400 transition-all flex flex-col justify-between">
@@ -449,8 +469,10 @@ class QuizApp {
             </div>
           </div>
           <div class="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
-            <span class="text-slate-400">Questions</span>
-            <span class="font-extrabold text-slate-700 dark:text-slate-300">${count} Qs</span>
+            <span class="text-slate-400">${count} Qs</span>
+            <span class="font-bold ${isAllDone ? 'text-emerald-600 dark:text-emerald-400' : (doneCount > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400')}">
+              ${doneCount}/${count} Done ${isAllDone ? '✓' : ''}
+            </span>
           </div>
         </label>
       `;
@@ -606,9 +628,25 @@ class QuizApp {
   }
 
   getMatchingPool() {
-    return this.questions.filter(q => 
-      this.selectedYears.has(q.year) && this.selectedWeeks.has(q.week)
-    );
+    const statusFilter = document.getElementById('builder-status-filter')?.value || 'all';
+    return this.questions.filter(q => {
+      if (!this.selectedYears.has(q.year)) return false;
+      if (!this.selectedWeeks.has(q.week)) return false;
+
+      if (statusFilter !== 'all') {
+        const stat = this.questionStatus && this.questionStatus[q.id];
+        if (statusFilter === 'unattempted') {
+          if (stat) return false;
+        } else if (statusFilter === 'wrong') {
+          if (!stat || stat.status !== 'wrong') return false;
+        } else if (statusFilter === 'correct') {
+          if (!stat || stat.status !== 'correct') return false;
+        } else if (statusFilter === 'attempted') {
+          if (!stat) return false;
+        }
+      }
+      return true;
+    });
   }
 
   // ==========================================
@@ -742,6 +780,7 @@ class QuizApp {
     document.getElementById('q-week-badge').textContent = q.week === 0 ? 'Week 0 (Intro)' : `Week ${q.week}`;
     document.getElementById('q-type-badge').textContent = q.type === 'MSQ' ? 'Multiple Select (MSQ)' : 'Single Choice (MCQ)';
     document.getElementById('q-id-badge').textContent = `#${q.id}`;
+    this.updateQuestionStatusBadge(q);
 
     // Question Text
     document.getElementById('q-text').textContent = q.question;
@@ -935,6 +974,10 @@ class QuizApp {
         // Add to mistakes vault
         this.addMistake(q);
       }
+
+      // Record persistent question status immediately
+      this.recordQuestionStatus(q.id, current, isCorrect);
+      this.updateQuestionStatusBadge(q, isCorrect);
     }
 
     // High-speed in-place update of options (zero latency)
@@ -967,6 +1010,7 @@ class QuizApp {
     this.activeTest.revealedPractice.delete(q.id);
     this.renderOptionsState(q);
     this.updateCurrentPaletteButton();
+    this.updateQuestionStatusBadge(q);
   }
 
   toggleCurrentFlag() {
@@ -1200,9 +1244,13 @@ class QuizApp {
           wrong++;
           this.addMistake(q);
         }
+        this.recordQuestionStatus(q.id, userAns, isRight);
       }
     });
 
+    this.flushQuestionStatusSave();
+    this.updateGlobalProgressUI();
+    this.renderWeekSelectors();
     this.updateNavBadges();
 
     const total = questions.length;
@@ -1465,10 +1513,25 @@ class QuizApp {
     const query = (document.getElementById('explorer-search-input')?.value || '').toLowerCase().trim();
     const year = document.getElementById('explorer-year-select')?.value || 'all';
     const week = document.getElementById('explorer-week-select')?.value || 'all';
+    const status = document.getElementById('explorer-status-select')?.value || 'all';
 
     let matches = this.questions.filter(q => {
       if (year !== 'all' && q.year !== year) return false;
       if (week !== 'all' && String(q.week) !== week) return false;
+
+      if (status !== 'all') {
+        const stat = this.questionStatus && this.questionStatus[q.id];
+        if (status === 'unattempted') {
+          if (stat) return false;
+        } else if (status === 'done') {
+          if (!stat) return false;
+        } else if (status === 'correct') {
+          if (!stat || stat.status !== 'correct') return false;
+        } else if (status === 'wrong') {
+          if (!stat || stat.status !== 'wrong') return false;
+        }
+      }
+
       if (query) {
         const words = query.split(/\s+/).filter(Boolean);
         const fullText = (q.question + ' ' + q.options.map(o => o.text).join(' ') + ' ' + (q.explanation || '')).toLowerCase();
@@ -1496,6 +1559,18 @@ class QuizApp {
     let html = '';
     displayList.forEach(q => {
       const isBookmarked = this.bookmarks.has(q.id);
+      const stat = this.questionStatus && this.questionStatus[q.id];
+      let statusBadge = '';
+      if (stat) {
+        if (stat.status === 'correct') {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>Mastered (${stat.attempts || 1}x)</span></span>`;
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-1"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg><span>Missed (${stat.attempts || 1}x)</span></span>`;
+        }
+      } else {
+        statusBadge = `<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">Fresh</span>`;
+      }
+
       html += `
         <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -1504,6 +1579,7 @@ class QuizApp {
                 ${q.year} • ${q.week === 0 ? 'Intro' : `Week ${q.week}`}
               </span>
               <span class="text-xs text-slate-500 font-semibold">${q.type}</span>
+              ${statusBadge}
             </div>
             <button onclick="app.toggleBookmark('${q.id}'); app.filterExplorer();" class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 ${isBookmarked ? 'text-amber-500 bg-amber-50 dark:bg-amber-950' : 'text-slate-400 hover:text-amber-500'}">
               <i data-lucide="bookmark" class="w-4 h-4"></i>
@@ -1618,6 +1694,214 @@ class QuizApp {
         console.warn("Storage error in scheduleSaveMistakes:", e);
       }
     }, 200);
+  }
+
+  flushMistakesSave() {
+    if (this._saveMistakesTimeout) {
+      clearTimeout(this._saveMistakesTimeout);
+      this._saveMistakesTimeout = null;
+    }
+    if (this.mistakes && typeof this.mistakes === 'object') {
+      try {
+        localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+      } catch (e) {
+        console.warn("Storage error in flushMistakesSave:", e);
+      }
+    }
+  }
+
+  // ==========================================
+  // QUESTION STATUS & MASTERY ENGINE
+  // ==========================================
+  loadQuestionStatusFromStorage() {
+    let statusMap = {};
+    const possibleKeys = ['psych_question_status', 'psychology_question_status', 'nptel_question_status'];
+    for (const k of possibleKeys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            statusMap = { ...statusMap, ...parsed };
+          }
+        }
+      } catch (e) {
+        console.warn("Storage read error for question status:", k, e);
+      }
+    }
+
+    // Auto-seed from mistakes vault if question has no status yet
+    // Guarantees any previous mistake history is seamlessly recognized as attempted/missed
+    if (this.mistakes && typeof this.mistakes === 'object') {
+      Object.keys(this.mistakes).forEach(id => {
+        if (!statusMap[id]) {
+          const item = this.mistakes[id];
+          statusMap[id] = {
+            status: 'wrong',
+            lastAnswer: [],
+            lastAttemptedAt: (item && item.addedAt) || Date.now(),
+            attempts: (item && item.count) || 1,
+            correctCount: 0,
+            wrongCount: (item && item.count) || 1
+          };
+        }
+      });
+    }
+
+    return statusMap;
+  }
+
+  scheduleSaveQuestionStatus() {
+    if (this._saveQuestionStatusTimeout) return;
+    this._saveQuestionStatusTimeout = setTimeout(() => {
+      this.flushQuestionStatusSave();
+    }, 200);
+  }
+
+  flushQuestionStatusSave() {
+    if (this._saveQuestionStatusTimeout) {
+      clearTimeout(this._saveQuestionStatusTimeout);
+      this._saveQuestionStatusTimeout = null;
+    }
+    try {
+      localStorage.setItem('psych_question_status', JSON.stringify(this.questionStatus));
+    } catch (e) {
+      console.warn("Storage write error for question status:", e);
+    }
+  }
+
+  recordQuestionStatus(qId, userAnswers, isCorrect) {
+    if (!qId) return;
+    const existing = (this.questionStatus && this.questionStatus[qId]) || {
+      attempts: 0,
+      correctCount: 0,
+      wrongCount: 0
+    };
+
+    const attempts = (existing.attempts || 0) + 1;
+    const correctCount = (existing.correctCount || 0) + (isCorrect ? 1 : 0);
+    const wrongCount = (existing.wrongCount || 0) + (isCorrect ? 0 : 1);
+
+    if (!this.questionStatus) this.questionStatus = {};
+    this.questionStatus[qId] = {
+      status: isCorrect ? 'correct' : 'wrong',
+      lastAnswer: Array.isArray(userAnswers) ? [...userAnswers] : [userAnswers],
+      lastAttemptedAt: Date.now(),
+      attempts,
+      correctCount,
+      wrongCount
+    };
+
+    this.scheduleSaveQuestionStatus();
+    this.updateGlobalProgressUI();
+  }
+
+  updateQuestionStatusBadge(q, justAnsweredCorrect = null) {
+    const badge = document.getElementById('q-status-badge');
+    if (!badge || !q) return;
+
+    if (justAnsweredCorrect !== null) {
+      if (justAnsweredCorrect) {
+        badge.className = "px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center space-x-1";
+        badge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>Mastered</span>`;
+      } else {
+        badge.className = "px-2.5 py-1 rounded-md text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center space-x-1";
+        badge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg><span>Needs Revision</span>`;
+      }
+      return;
+    }
+
+    const stat = this.questionStatus && this.questionStatus[q.id];
+    if (stat) {
+      if (stat.status === 'correct') {
+        badge.className = "px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center space-x-1";
+        badge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>Previously Mastered</span>`;
+      } else {
+        badge.className = "px-2.5 py-1 rounded-md text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center space-x-1";
+        badge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg><span>Previously Missed</span>`;
+      }
+    } else {
+      badge.className = "px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 flex items-center space-x-1";
+      badge.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg><span>Not Attempted</span>`;
+    }
+  }
+
+  updateGlobalProgressUI() {
+    const totalQuestions = this.questions ? this.questions.length : 478;
+    let correctCount = 0;
+    let wrongCount = 0;
+
+    if (this.questionStatus && this.questions) {
+      this.questions.forEach(q => {
+        const s = this.questionStatus[q.id];
+        if (s) {
+          if (s.status === 'correct') correctCount++;
+          else if (s.status === 'wrong') wrongCount++;
+        }
+      });
+    }
+
+    const attemptedCount = correctCount + wrongCount;
+    const freshCount = Math.max(0, totalQuestions - attemptedCount);
+    const attemptedPct = totalQuestions > 0 ? Math.round((attemptedCount / totalQuestions) * 100) : 0;
+    const correctPct = totalQuestions > 0 ? ((correctCount / totalQuestions) * 100).toFixed(1) : 0;
+    const wrongPct = totalQuestions > 0 ? ((wrongCount / totalQuestions) * 100).toFixed(1) : 0;
+
+    const pill = document.getElementById('mastery-percentage-pill');
+    if (pill) pill.textContent = `${attemptedPct}% Done (${attemptedCount}/${totalQuestions})`;
+
+    const barCorrect = document.getElementById('mastery-bar-correct');
+    if (barCorrect && barCorrect.style) barCorrect.style.width = `${correctPct}%`;
+
+    const barWrong = document.getElementById('mastery-bar-wrong');
+    if (barWrong && barWrong.style) barWrong.style.width = `${wrongPct}%`;
+
+    const summaryCount = document.getElementById('mastery-summary-count');
+    if (summaryCount) summaryCount.textContent = `${attemptedCount} of ${totalQuestions} Questions Completed (${correctCount} Mastered)`;
+
+    const unattemptedCount = document.getElementById('mastery-unattempted-count');
+    if (unattemptedCount) unattemptedCount.textContent = `${freshCount} Fresh Remaining`;
+
+    const statTotal = document.getElementById('stat-progress-total');
+    if (statTotal) statTotal.textContent = `${attemptedCount} / ${totalQuestions}`;
+
+    const statCorrect = document.getElementById('stat-progress-correct');
+    if (statCorrect) statCorrect.textContent = correctCount;
+
+    const statWrong = document.getElementById('stat-progress-wrong');
+    if (statWrong) statWrong.textContent = wrongCount;
+
+    const statFresh = document.getElementById('stat-progress-fresh');
+    if (statFresh) statFresh.textContent = freshCount;
+  }
+
+  resetQuestionStatusConfirm() {
+    const modal = document.getElementById('modal-reset-status');
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  closeResetModal() {
+    const modal = document.getElementById('modal-reset-status');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  resetQuestionStatus() {
+    this.closeResetModal();
+    this.questionStatus = {};
+    const keys = ['psych_question_status', 'psychology_question_status', 'nptel_question_status'];
+    keys.forEach(k => {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    this.updateGlobalProgressUI();
+    this.renderWeekSelectors();
+    this.updateMatchCount();
+    if (this.currentView === 'explorer') {
+      this.filterExplorer();
+    }
+    this.showToast("Question progress reset successfully. Mistakes Vault preserved.", "info");
   }
 
   addMistake(question) {
@@ -1791,11 +2075,12 @@ class QuizApp {
 
     const exportPayload = {
       app: "NPTEL Psychology of Learning MCQ Mastery Platform",
-      schemaVersion: "2.0",
+      schemaVersion: "2.1",
       exportDate: new Date().toISOString(),
       timestamp: Date.now(),
       totalMistakes: mistakeKeys.length,
-      mistakes: exportVault
+      mistakes: exportVault,
+      questionStatus: this.questionStatus || {}
     };
 
     try {
@@ -1813,7 +2098,7 @@ class QuizApp {
       document.body.removeChild(downloadAnchor);
       URL.revokeObjectURL(url);
 
-      this.showToast(`Exported ${mistakeKeys.length} mistakes to ${filename}!`, "success");
+      this.showToast(`Exported ${mistakeKeys.length} mistakes & question progress to ${filename}!`, "success");
     } catch (err) {
       console.error("Export error:", err);
       this.showToast("Failed to generate export file: " + err.message, "error");
@@ -1908,6 +2193,47 @@ class QuizApp {
       localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
     } catch (e) {
       console.error("Failed to write imported mistakes to localStorage:", e);
+    }
+
+    // Merge Question Status if included in backup
+    if (parsed.questionStatus && typeof parsed.questionStatus === 'object') {
+      if (!this.questionStatus) this.questionStatus = {};
+      Object.keys(parsed.questionStatus).forEach(qId => {
+        const incoming = parsed.questionStatus[qId];
+        if (!this.questionStatus[qId]) {
+          this.questionStatus[qId] = incoming;
+        } else {
+          const cur = this.questionStatus[qId];
+          this.questionStatus[qId] = {
+            status: incoming.status || cur.status,
+            lastAnswer: incoming.lastAnswer || cur.lastAnswer,
+            lastAttemptedAt: Math.max(cur.lastAttemptedAt || 0, incoming.lastAttemptedAt || 0),
+            attempts: Math.max(cur.attempts || 1, incoming.attempts || 1),
+            correctCount: Math.max(cur.correctCount || 0, incoming.correctCount || 0),
+            wrongCount: Math.max(cur.wrongCount || 0, incoming.wrongCount || 0)
+          };
+        }
+      });
+      this.flushQuestionStatusSave();
+      this.updateGlobalProgressUI();
+      this.renderWeekSelectors();
+    } else {
+      // Ensure all newly imported mistakes are also recorded in questionStatus as wrong
+      importedIds.forEach(id => {
+        if (!this.questionStatus[id]) {
+          this.questionStatus[id] = {
+            status: 'wrong',
+            lastAnswer: [],
+            lastAttemptedAt: (merged[id] && merged[id].addedAt) || Date.now(),
+            attempts: (merged[id] && merged[id].count) || 1,
+            correctCount: 0,
+            wrongCount: (merged[id] && merged[id].count) || 1
+          };
+        }
+      });
+      this.flushQuestionStatusSave();
+      this.updateGlobalProgressUI();
+      this.renderWeekSelectors();
     }
 
     this.updateNavBadges();
