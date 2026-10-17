@@ -196,3 +196,24 @@ body {
     color: black !important;
   }
 }
+
+/* Mobile touch responsiveness: eliminate 300ms tap delay & unwanted highlight */
+button,
+a,
+input,
+select,
+.option-card,
+.palette-btn,
+.nav-tab {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Static mobile navigation bar docking */
+#quiz-bottom-nav {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+

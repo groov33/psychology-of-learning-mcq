@@ -26,6 +26,8 @@ class QuizApp {
     // Active Test State
     this.activeTest = null;
     this.timerInterval = null;
+    this.autoAdvanceTimer = null;
+    this._saveMistakesTimeout = null;
     
     // LocalStorage Persistent Stores
     this.bookmarks = new Set(JSON.parse(localStorage.getItem('psych_bookmarks') || '[]'));
@@ -345,7 +347,20 @@ class QuizApp {
     return result;
   }
 
+  flushMistakesSave() {
+    if (this._saveMistakesTimeout) {
+      clearTimeout(this._saveMistakesTimeout);
+      this._saveMistakesTimeout = null;
+      try {
+        localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+      } catch (e) {
+        console.warn("Storage error in flushMistakesSave:", e);
+      }
+    }
+  }
+
   loadMistakesFromStorage() {
+    this.flushMistakesSave();
     const candidateKeys = [
       'psych_mistakes',
       'psychology_mistakes',
@@ -429,8 +444,8 @@ class QuizApp {
             <div class="text-xs font-bold text-slate-900 dark:text-slate-100 line-clamp-1" title="${topInfo.title}">
               ${topInfo.title}
             </div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5" title="${topInfo.concepts.join(', ')}">
-              ${topInfo.concepts.slice(0, 2).join(' • ')}
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5" title="${(topInfo.concepts || []).join(', ')}">
+              ${(topInfo.concepts || []).slice(0, 2).join(' • ')}
             </div>
           </div>
           <div class="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
@@ -684,8 +699,8 @@ class QuizApp {
     }
 
     this.showView('quiz');
+    this.initPalette();
     this.renderQuestion(0);
-    this.renderPalette();
   }
 
   shuffleArray(array) {
@@ -699,8 +714,17 @@ class QuizApp {
   // ==========================================
   // QUESTION RENDERING & INTERACTION
   // ==========================================
+  // ==========================================
+  // QUESTION RENDERING & INTERACTION
+  // ==========================================
   renderQuestion(index) {
     if (!this.activeTest) return;
+
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+
     this.activeTest.currentIndex = index;
     const q = this.activeTest.questions[index];
     const total = this.activeTest.questions.length;
@@ -722,61 +746,149 @@ class QuizApp {
     // Question Text
     document.getElementById('q-text').textContent = q.question;
 
-    // Options List
+    // Render Options List
+    this.renderOptionsState(q);
+
+    // Bookmark & Flag buttons state
+    const isBookmarked = this.bookmarks.has(q.id);
+    const bmBtn = document.getElementById('quiz-bookmark-btn');
+    if (bmBtn) {
+      bmBtn.className = isBookmarked
+        ? "p-2 rounded-lg border border-amber-300 dark:border-amber-800 text-amber-500 bg-amber-50 dark:bg-amber-950/40 transition touch-manipulation"
+        : "p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition touch-manipulation";
+    }
+
+    const isFlagged = this.activeTest.flagged.has(q.id);
+    const flagBtn = document.getElementById('btn-flag-q');
+    if (flagBtn) {
+      flagBtn.className = isFlagged
+        ? "px-2.5 sm:px-3 py-2 rounded-xl border border-amber-400 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-xs font-bold transition flex items-center space-x-1 touch-manipulation"
+        : "px-2.5 sm:px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 transition flex items-center space-x-1 touch-manipulation";
+    }
+
+    // Prev / Next button state
+    const prevBtn = document.getElementById('btn-prev-q');
+    if (prevBtn) {
+      prevBtn.disabled = index === 0;
+      prevBtn.classList.toggle('opacity-40', index === 0);
+    }
+
+    const nextBtn = document.getElementById('btn-next-q');
+    if (nextBtn) {
+      if (index === total - 1) {
+        nextBtn.innerHTML = `<span>Submit</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+      } else {
+        nextBtn.innerHTML = `<span>Next</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>`;
+      }
+    }
+
+    this.updatePalette();
+  }
+
+  renderOptionsState(q) {
     const container = document.getElementById('q-options-container');
-    container.innerHTML = '';
+    if (!container) return;
+
     const userSelected = this.activeTest.userAnswers[q.id] || [];
     const isPracticeRevealed = this.activeTest.mode === 'practice' && this.activeTest.revealedPractice.has(q.id);
 
-    q.options.forEach(opt => {
-      const isSelected = userSelected.includes(opt.key);
-      const isCorrect = q.answer.includes(opt.key);
+    const cards = container.querySelectorAll('.option-card');
+    if (cards.length === q.options.length) {
+      // In-place ultra fast update without DOM thrashing
+      q.options.forEach((opt, idx) => {
+        const card = cards[idx];
+        const isSelected = userSelected.includes(opt.key);
+        const isCorrect = q.answer.includes(opt.key);
 
-      const card = document.createElement('div');
-      let cardClass = "option-card flex items-start space-x-3 p-4 rounded-xl border-2 ";
-      let pillClass = "option-pill ";
+        let cardClass = "option-card flex items-start space-x-3 p-4 rounded-xl border-2 ";
+        let pillClass = "option-pill ";
 
-      if (isPracticeRevealed) {
-        cardClass += "locked ";
-        if (isCorrect) {
-          cardClass += "correct-revealed ";
-          pillClass += "bg-emerald-500 text-white";
-        } else if (isSelected && !isCorrect) {
-          cardClass += "wrong-revealed ";
-          pillClass += "bg-rose-500 text-white";
+        if (isPracticeRevealed) {
+          cardClass += "locked ";
+          if (isCorrect) {
+            cardClass += "correct-revealed ";
+            pillClass += "bg-emerald-500 text-white";
+          } else if (isSelected && !isCorrect) {
+            cardClass += "wrong-revealed ";
+            pillClass += "bg-rose-500 text-white";
+          } else {
+            cardClass += "border-slate-200 dark:border-slate-800 opacity-60 ";
+            pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
+          }
         } else {
-          cardClass += "border-slate-200 dark:border-slate-800 opacity-60 ";
-          pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
+          if (isSelected) {
+            cardClass += "border-brand-500 bg-brand-50/60 dark:bg-brand-950/40 text-brand-950 dark:text-brand-100 ";
+            pillClass += "bg-brand-600 text-white";
+          } else {
+            cardClass += "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 ";
+            pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300";
+          }
         }
-      } else {
-        if (isSelected) {
-          cardClass += "border-brand-500 bg-brand-50/60 dark:bg-brand-950/40 text-brand-950 dark:text-brand-100 ";
-          pillClass += "bg-brand-600 text-white";
+
+        card.className = cardClass;
+        const pill = card.querySelector('.option-pill');
+        if (pill) pill.className = pillClass;
+
+        const statusIcon = isPracticeRevealed ? (
+          isCorrect ? '<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' :
+          (isSelected ? '<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>' : '')
+        ) : '';
+        const iconSlot = card.querySelector('.option-icon-slot');
+        if (iconSlot) iconSlot.innerHTML = statusIcon;
+      });
+    } else {
+      // Rebuild options on question change
+      container.innerHTML = '';
+      q.options.forEach(opt => {
+        const isSelected = userSelected.includes(opt.key);
+        const isCorrect = q.answer.includes(opt.key);
+
+        const card = document.createElement('div');
+        let cardClass = "option-card flex items-start space-x-3 p-4 rounded-xl border-2 ";
+        let pillClass = "option-pill ";
+
+        if (isPracticeRevealed) {
+          cardClass += "locked ";
+          if (isCorrect) {
+            cardClass += "correct-revealed ";
+            pillClass += "bg-emerald-500 text-white";
+          } else if (isSelected && !isCorrect) {
+            cardClass += "wrong-revealed ";
+            pillClass += "bg-rose-500 text-white";
+          } else {
+            cardClass += "border-slate-200 dark:border-slate-800 opacity-60 ";
+            pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
+          }
         } else {
-          cardClass += "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 ";
-          pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300";
+          if (isSelected) {
+            cardClass += "border-brand-500 bg-brand-50/60 dark:bg-brand-950/40 text-brand-950 dark:text-brand-100 ";
+            pillClass += "bg-brand-600 text-white";
+          } else {
+            cardClass += "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 ";
+            pillClass += "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300";
+          }
         }
-      }
 
-      card.className = cardClass;
-      card.onclick = () => this.selectOption(opt.key);
+        card.className = cardClass;
+        card.onclick = () => this.selectOption(opt.key);
 
-      const statusIcon = isPracticeRevealed ? (
-        isCorrect ? '<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' :
-        (isSelected ? '<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>' : '')
-      ) : '';
+        const statusIcon = isPracticeRevealed ? (
+          isCorrect ? '<svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>' :
+          (isSelected ? '<svg class="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>' : '')
+        ) : '';
 
-      card.innerHTML = `
-        <div class="${pillClass}">${opt.key}</div>
-        <div class="flex-1 text-sm sm:text-base font-medium leading-relaxed pt-0.5 pr-2">
-          ${opt.text}
-        </div>
-        <div class="w-6 h-6 flex items-center justify-center flex-shrink-0 pt-0.5">
-          ${statusIcon}
-        </div>
-      `;
-      container.appendChild(card);
-    });
+        card.innerHTML = `
+          <div class="${pillClass}">${opt.key}</div>
+          <div class="flex-1 text-sm sm:text-base font-medium leading-relaxed pt-0.5 pr-2">
+            ${opt.text}
+          </div>
+          <div class="option-icon-slot w-6 h-6 flex items-center justify-center flex-shrink-0 pt-0.5">
+            ${statusIcon}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
 
     // Explanation Box in Practice Mode
     const expBox = document.getElementById('q-explanation-box');
@@ -787,43 +899,16 @@ class QuizApp {
     } else {
       expBox.classList.add('hidden');
     }
-
-    // Bookmark & Flag buttons state
-    const isBookmarked = this.bookmarks.has(q.id);
-    const bmBtn = document.getElementById('quiz-bookmark-btn');
-    if (isBookmarked) {
-      bmBtn.className = "p-2 rounded-lg border border-amber-300 dark:border-amber-800 text-amber-500 bg-amber-50 dark:bg-amber-950/40 transition";
-    } else {
-      bmBtn.className = "p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition";
-    }
-
-    const isFlagged = this.activeTest.flagged.has(q.id);
-    const flagBtn = document.getElementById('btn-flag-q');
-    if (isFlagged) {
-      flagBtn.className = "px-3 py-2 rounded-xl border border-amber-400 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-xs font-bold transition flex items-center space-x-1";
-    } else {
-      flagBtn.className = "px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 transition flex items-center space-x-1";
-    }
-
-    // Prev / Next button state
-    document.getElementById('btn-prev-q').disabled = index === 0;
-    document.getElementById('btn-prev-q').classList.toggle('opacity-40', index === 0);
-
-    const nextBtn = document.getElementById('btn-next-q');
-    if (index === total - 1) {
-      nextBtn.innerHTML = `<span>Submit</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
-    } else {
-      nextBtn.innerHTML = `<span>Next</span> <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>`;
-    }
-
-    this.renderPalette();
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
   }
 
   selectOption(optKey) {
     if (!this.activeTest) return;
+
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+
     const q = this.activeTest.questions[this.activeTest.currentIndex];
     let current = this.activeTest.userAnswers[q.id] || [];
 
@@ -840,26 +925,48 @@ class QuizApp {
 
     this.activeTest.userAnswers[q.id] = current;
 
+    let isCorrect = false;
     if (this.activeTest.mode === 'practice') {
       this.activeTest.revealedPractice.add(q.id);
       
       // Check correctness
-      const isCorrect = this.isAnswerCorrect(current, q.answer);
+      isCorrect = this.isAnswerCorrect(current, q.answer);
       if (!isCorrect) {
         // Add to mistakes vault
         this.addMistake(q);
       }
     }
 
-    this.renderQuestion(this.activeTest.currentIndex);
+    // High-speed in-place update of options (zero latency)
+    this.renderOptionsState(q);
+    this.updateCurrentPaletteButton();
+
+    // Auto-advance rule:
+    // If the answer is correct in practice mode, directly move on to next question!
+    // If it is wrong, stay on that page.
+    if (this.activeTest.mode === 'practice' && isCorrect) {
+      if (this.activeTest.currentIndex < this.activeTest.questions.length - 1) {
+        this.autoAdvanceTimer = setTimeout(() => {
+          this.autoAdvanceTimer = null;
+          if (this.activeTest && this.currentView === 'quiz') {
+            this.nextQuestion();
+          }
+        }, 320);
+      }
+    }
   }
 
   clearCurrentResponse() {
     if (!this.activeTest) return;
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
     const q = this.activeTest.questions[this.activeTest.currentIndex];
     delete this.activeTest.userAnswers[q.id];
     this.activeTest.revealedPractice.delete(q.id);
-    this.renderQuestion(this.activeTest.currentIndex);
+    this.renderOptionsState(q);
+    this.updateCurrentPaletteButton();
   }
 
   toggleCurrentFlag() {
@@ -870,28 +977,66 @@ class QuizApp {
     } else {
       this.activeTest.flagged.add(q.id);
     }
-    this.renderQuestion(this.activeTest.currentIndex);
+    const isFlagged = this.activeTest.flagged.has(q.id);
+    const flagBtn = document.getElementById('btn-flag-q');
+    if (flagBtn) {
+      flagBtn.className = isFlagged
+        ? "px-2.5 sm:px-3 py-2 rounded-xl border border-amber-400 bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-xs font-bold transition flex items-center space-x-1 touch-manipulation"
+        : "px-2.5 sm:px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 transition flex items-center space-x-1 touch-manipulation";
+    }
+    this.updateCurrentPaletteButton();
   }
 
   toggleCurrentBookmark() {
     if (!this.activeTest) return;
     const q = this.activeTest.questions[this.activeTest.currentIndex];
     this.toggleBookmark(q.id);
-    this.renderQuestion(this.activeTest.currentIndex);
+    const isBookmarked = this.bookmarks.has(q.id);
+    const bmBtn = document.getElementById('quiz-bookmark-btn');
+    if (bmBtn) {
+      bmBtn.className = isBookmarked
+        ? "p-2 rounded-lg border border-amber-300 dark:border-amber-800 text-amber-500 bg-amber-50 dark:bg-amber-950/40 transition touch-manipulation"
+        : "p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition touch-manipulation";
+    }
   }
 
   prevQuestion() {
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
     if (this.activeTest && this.activeTest.currentIndex > 0) {
       this.renderQuestion(this.activeTest.currentIndex - 1);
+      window.scrollTo({ top: 0, behavior: 'auto' });
     }
   }
 
   nextQuestion() {
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
     if (!this.activeTest) return;
     if (this.activeTest.currentIndex < this.activeTest.questions.length - 1) {
       this.renderQuestion(this.activeTest.currentIndex + 1);
+      window.scrollTo({ top: 0, behavior: 'auto' });
     } else {
       this.submitTestConfirm();
+    }
+  }
+
+  jumpToQuestion(idx) {
+    if (this.autoAdvanceTimer) {
+      clearTimeout(this.autoAdvanceTimer);
+      this.autoAdvanceTimer = null;
+    }
+    this.renderQuestion(idx);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (window.innerWidth < 1024) {
+      const drawer = document.getElementById('palette-drawer');
+      if (drawer && !drawer.classList.contains('hidden')) {
+        drawer.classList.add('hidden');
+      }
     }
   }
 
@@ -900,27 +1045,47 @@ class QuizApp {
   // ==========================================
   togglePaletteDrawer() {
     const drawer = document.getElementById('palette-drawer');
-    drawer.classList.toggle('hidden');
+    if (drawer) {
+      drawer.classList.toggle('hidden');
+    }
   }
 
-  renderPalette() {
+  initPalette() {
     if (!this.activeTest) return;
     const grid = document.getElementById('palette-buttons-grid');
     if (!grid) return;
 
     let html = '';
+    const total = this.activeTest.questions.length;
+    for (let idx = 0; idx < total; idx++) {
+      html += `
+        <button id="palette-btn-${idx}" onclick="app.jumpToQuestion(${idx})" class="palette-btn bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 touch-manipulation" title="Go to Question ${idx + 1}">
+          ${idx + 1}
+        </button>
+      `;
+    }
+    grid.innerHTML = html;
+    this.updatePalette();
+  }
+
+  updatePalette() {
+    if (!this.activeTest) return;
     let answeredCount = 0;
+    const currentIdx = this.activeTest.currentIndex;
 
     this.activeTest.questions.forEach((q, idx) => {
-      const isCurrent = idx === this.activeTest.currentIndex;
+      const btn = document.getElementById(`palette-btn-${idx}`);
       const ans = this.activeTest.userAnswers[q.id];
       const isAnswered = ans && ans.length > 0;
+      if (isAnswered) answeredCount++;
+
+      if (!btn) return;
+
+      const isCurrent = idx === currentIdx;
       const isFlagged = this.activeTest.flagged.has(q.id);
       const isPracticeRevealed = this.activeTest.mode === 'practice' && this.activeTest.revealedPractice.has(q.id);
 
-      if (isAnswered) answeredCount++;
-
-      let btnClass = "palette-btn ";
+      let btnClass = "palette-btn touch-manipulation ";
       if (isCurrent) btnClass += "current ";
 
       if (isPracticeRevealed) {
@@ -934,15 +1099,46 @@ class QuizApp {
         btnClass += "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 ";
       }
 
-      html += `
-        <button onclick="app.renderQuestion(${idx})" class="${btnClass}" title="Go to Question ${idx + 1}">
-          ${idx + 1}
-        </button>
-      `;
+      btn.className = btnClass;
     });
 
-    grid.innerHTML = html;
-    document.getElementById('palette-stats-summary').textContent = `${answeredCount} / ${this.activeTest.questions.length} Answered`;
+    const summary = document.getElementById('palette-stats-summary');
+    if (summary) {
+      summary.textContent = `${answeredCount} / ${this.activeTest.questions.length} Answered`;
+    }
+  }
+
+  updateCurrentPaletteButton() {
+    if (!this.activeTest) return;
+    const idx = this.activeTest.currentIndex;
+    const btn = document.getElementById(`palette-btn-${idx}`);
+    const q = this.activeTest.questions[idx];
+    if (!btn || !q) return;
+
+    const ans = this.activeTest.userAnswers[q.id];
+    const isAnswered = ans && ans.length > 0;
+    const isCurrent = true;
+    const isFlagged = this.activeTest.flagged.has(q.id);
+    const isPracticeRevealed = this.activeTest.mode === 'practice' && this.activeTest.revealedPractice.has(q.id);
+
+    let btnClass = "palette-btn current touch-manipulation ";
+    if (isPracticeRevealed) {
+      const correct = this.isAnswerCorrect(ans, q.answer);
+      btnClass += correct ? "bg-emerald-500 text-white " : "bg-rose-500 text-white ";
+    } else if (isFlagged) {
+      btnClass += "bg-amber-500 text-white ";
+    } else if (isAnswered) {
+      btnClass += "bg-brand-600 text-white ";
+    } else {
+      btnClass += "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 ";
+    }
+    btn.className = btnClass;
+
+    const summary = document.getElementById('palette-stats-summary');
+    if (summary) {
+      const answered = Object.keys(this.activeTest.userAnswers).length;
+      summary.textContent = `${answered} / ${this.activeTest.questions.length} Answered`;
+    }
   }
 
   isAnswerCorrect(userAns, correctAns) {
@@ -1412,6 +1608,18 @@ class QuizApp {
   // ==========================================
   // MISTAKE VAULT & BOOKMARKS
   // ==========================================
+  scheduleSaveMistakes() {
+    if (this._saveMistakesTimeout) return;
+    this._saveMistakesTimeout = setTimeout(() => {
+      this._saveMistakesTimeout = null;
+      try {
+        localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
+      } catch (e) {
+        console.warn("Storage error in scheduleSaveMistakes:", e);
+      }
+    }, 200);
+  }
+
   addMistake(question) {
     if (!question || !question.id) return;
     const qId = question.id;
@@ -1429,11 +1637,7 @@ class QuizApp {
       this.mistakes[qId].question = canonicalQ;
     }
 
-    try {
-      localStorage.setItem('psych_mistakes', JSON.stringify(this.mistakes));
-    } catch (e) {
-      console.warn("Storage error in addMistake:", e);
-    }
+    this.scheduleSaveMistakes();
     this.updateNavBadges();
   }
 
